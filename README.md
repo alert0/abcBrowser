@@ -4,8 +4,9 @@ abcBrowser 是浏览器内核集成与桌面管理器项目，目标是复用 Pr
 
 ## 文档
 
-- [Prism Browser Community × Apostate 内核集成审查报告](docs/architecture/prism-apostate-integration-review.md)
+- [项目开发规范](docs/development/development-standards.md)
 - [Codex 完整开发提示词：本地 Apostate 内核导入与 Windows 桌面版本](docs/development/codex-implementation-prompt.md)
+- [Prism Browser Community × Apostate 内核集成审查报告](docs/architecture/prism-apostate-integration-review.md)
 
 ## 当前开发原则
 
@@ -18,4 +19,4 @@ abcBrowser 是浏览器内核集成与桌面管理器项目，目标是复用 Pr
 
 ## 当前状态
 
-仓库已包含架构审查报告和完整 Codex 实施提示词。它们是开发依据，不代表桌面应用代码集成、构建或运行测试已经完成。
+仓库已包含开发规范、Codex 实施提示词和架构审查报告。它们是开发依据，不代表桌面应用代码集成、构建或运行测试已经完成。
