@@ -1,0 +1,17 @@
+node_modules/
+out/
+release/
+coverage/
+*.log
+.DS_Store
+
+# Local abcBrowser data and imported runtimes
+.abcBrowser/
+user-data/
+kernels/
+downloads/
+recycle-bin/
+*.prism-migration
+
+# Local dependency-manager metadata
+pnpm-workspace.yaml

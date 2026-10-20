@@ -1,11 +1,11 @@
 # abcBrowser 项目开发规范
 
-> 文档类型：项目级工程规范  
-> 适用项目：`alert0/abcBrowser`  
-> 当前目标平台：Windows x64  
-> 管理器基础：Prism Browser Community  
-> 浏览器运行时：Apostate Chromium  
-> 重要决策：第一阶段通过文件选择器导入用户本地已有的 `chrome.exe`，不开发内核自动下载器。  
+> 文档类型：项目级工程规范
+> 适用项目：`alert0/abcBrowser`
+> 当前目标平台：Windows x64
+> 管理器基础：Prism Browser Community
+> 浏览器运行时：Apostate Chromium
+> 重要决策：第一阶段通过文件选择器导入用户本地已有的 `chrome.exe`，不开发内核自动下载器。
 > 状态说明：本规范定义开发应遵守的规则，不代表相关功能已经实现或通过验收。
 
 ## 1. 规范目的与优先级

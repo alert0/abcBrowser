@@ -1,10 +1,10 @@
 # Prism Browser Community × Apostate 内核集成审查报告
 
-> **审查日期：** 2026-10-20  
-> **项目仓库：** [alert0/abcBrowser](https://github.com/alert0/abcBrowser)  
-> **审查对象：** [Prism Browser Community](https://github.com/DFarm6/Prism-Browser-Community) × [Apostate](https://github.com/heretic-tech/apostate)  
-> **目标平台：** Windows x64 优先  
-> **审查类型：** 公开源码、发行清单与关键调用链的静态架构审查  
+> **审查日期：** 2026-10-20
+> **项目仓库：** [alert0/abcBrowser](https://github.com/alert0/abcBrowser)
+> **审查对象：** [Prism Browser Community](https://github.com/DFarm6/Prism-Browser-Community) × [Apostate](https://github.com/heretic-tech/apostate)
+> **目标平台：** Windows x64 优先
+> **审查类型：** 公开源码、发行清单与关键调用链的静态架构审查
 > **结论状态：** 有条件推荐；尚未完成实际运行验收
 
 ## 1. 执行摘要
