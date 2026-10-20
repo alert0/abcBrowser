@@ -20,7 +20,7 @@ import type { Logger } from './app-logger'
 import type { AppSettings } from '../shared/types'
 import { kernelRequiresPro } from '../shared/kernel-policy'
 import { assertChromiumVersion } from './engines/apostate/version'
-import { APOSTATE_ENGINE_ID, APOSTATE_ENGINE_RELEASE } from './engines/apostate/capabilities'
+import { APOSTATE_ENGINE_ID } from './engines/apostate/capabilities'
 import { resolveApostateWindowsRuntimeRoot } from './engines/apostate/runtime-layout'
 
 const execFileAsync = promisify(execFile)
@@ -220,7 +220,6 @@ export class KernelManager {
         source: 'local-build',
         target: `${process.platform}-${process.arch}`,
         engineId: APOSTATE_ENGINE_ID,
-        engineRelease: APOSTATE_ENGINE_RELEASE,
         sourceVerification: 'unverified-local'
       }
       await writeFile(join(stagingPath, 'manifest.json'), JSON.stringify(manifest, null, 2), { mode: 0o600 })
