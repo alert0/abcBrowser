@@ -47,3 +47,18 @@ npm run dist:win
 - 将静态启动参数存在当作指纹运行时验证通过。
 
 真实测试结果见 [实施记录](docs/development/implementation-status.md)。
+## 本地开发启动
+
+Windows 下可直接双击项目根目录的 `start-dev.cmd`，或在 PowerShell 中执行：
+
+```powershell
+.\start-dev.ps1
+```
+
+脚本会自动检查依赖；未安装时优先使用 `npm ci`，找不到 npm 时尝试使用可用的 pnpm，然后启动 Electron 开发窗口。也可以继续使用：
+
+```powershell
+npm run dev
+```
+
+
