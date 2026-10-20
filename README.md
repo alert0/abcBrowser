@@ -52,7 +52,7 @@ npm run dist:win
 Windows 下可直接双击项目根目录的 `start-dev.cmd`，或在 PowerShell 中执行：
 
 ```powershell
-.\start-dev.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\start-dev.ps1
 ```
 
 脚本会自动检查依赖；未安装时优先使用 `npm ci`，找不到 npm 时尝试使用可用的 pnpm，然后启动 Electron 开发窗口。也可以继续使用：
