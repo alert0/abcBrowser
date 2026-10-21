@@ -1250,5 +1250,6 @@
   "页面输入参数无效": "Tham số đầu vào trang không hợp lệ",
   "高风险：WebRTC 使用所有接口": "Rủi ro cao: WebRTC dùng tất cả giao diện mạng",
   "默认全部关闭，逐个授权": "Mặc định tắt tất cả, cấp quyền từng hồ sơ",
-  "默认关闭，按需启动": "Mặc định tắt, chỉ bật khi cần"
+  "默认关闭，按需启动": "Mặc định tắt, chỉ bật khi cần",
+  "语言和时区将在启动时跟随代理；浏览器 Geolocation API 仍不模拟": "Ngôn ngữ và múi giờ sẽ theo proxy khi khởi chạy; Geolocation API của trình duyệt hiện chưa được mô phỏng."
 }

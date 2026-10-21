@@ -1250,5 +1250,6 @@
   "页面输入参数无效": "Sayfa giriş parametreleri geçersiz",
   "高风险：WebRTC 使用所有接口": "Yüksek risk: WebRTC tüm arabirimleri kullanır",
   "默认全部关闭，逐个授权": "Varsayılan olarak hepsi kapalı; profillere tek tek izin verin",
-  "默认关闭，按需启动": "Varsayılan olarak kapalı; gerektiğinde başlatın"
+  "默认关闭，按需启动": "Varsayılan olarak kapalı; gerektiğinde başlatın",
+  "语言和时区将在启动时跟随代理；浏览器 Geolocation API 仍不模拟": "Dil ve saat dilimi başlatılırken proxy'yi izler; tarayıcının Geolocation API'si taklit edilmez."
 }

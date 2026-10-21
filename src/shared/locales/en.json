@@ -1250,5 +1250,6 @@
   "页面输入参数无效": "Page input parameters are invalid",
   "高风险：WebRTC 使用所有接口": "High risk: WebRTC uses all interfaces",
   "默认全部关闭，逐个授权": "Access is off by default. Allow each profile individually.",
-  "默认关闭，按需启动": "Off by default. Start it only when needed."
+  "默认关闭，按需启动": "Off by default. Start it only when needed.",
+  "语言和时区将在启动时跟随代理；浏览器 Geolocation API 仍不模拟": "Language and time zone follow the proxy at launch; browser Geolocation API is not simulated."
 }
