@@ -1,0 +1,45 @@
+name: Apostate Runtime Acceptance
+
+on:
+  push:
+    branches:
+      - feature/apostate-local-kernel
+    paths:
+      - '.github/workflows/apostate-runtime-acceptance.yml'
+      - 'tools/apostate-runtime-acceptance/**'
+      - 'src/main/engines/apostate/**'
+      - 'src/main/browser-launcher.ts'
+      - 'src/main/host-hardware.ts'
+      - 'src/main/ipc.ts'
+      - 'src/preload/index.ts'
+      - 'src/renderer/src/ProfileEditor.tsx'
+      - 'src/shared/apostate-profile*'
+      - 'src/shared/hardware-profiles.ts'
+      - 'src/shared/types.ts'
+      - 'src/shared/validation.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-runtime:
+    name: Real Apostate Windows x64 runtime
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run pinned Apostate v0.5.1 acceptance
+        shell: pwsh
+        run: ./tools/apostate-runtime-acceptance/run.ps1
+
+      - name: Upload runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apostate-runtime-acceptance
+          path: ${{ runner.temp }}/apostate-native-acceptance/evidence.json
+          if-no-files-found: warn
+          retention-days: 14
