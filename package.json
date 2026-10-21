@@ -91,7 +91,7 @@
       "signIgnore": "[/\\\\]Contents[/\\\\]Resources[/\\\\](?:kernels[/\\\\](?:current|available[/\\\\]\\d+(?:\\.\\d+){3})[/\\\\]Chromium\\.app|pro-agent[/\\\\]prism-pro-agent(?:-[A-Za-z0-9._-]+)?)(?:[/\\\\]|$)"
     },
     "win": {
-      "icon": "build/icon.svg",
+      "icon": "build/icon.ico",
       "signtoolOptions": {
         "signingHashAlgorithms": [
           "sha256"
