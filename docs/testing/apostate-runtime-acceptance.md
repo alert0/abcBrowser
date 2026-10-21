@@ -3,7 +3,9 @@
 更新日期：2026-10-21
 目标分支：`feature/apostate-local-kernel`
 本机复现基线：`78f074730e433ea3d03f3a2c84f29cdd54e6cc90`
-保护分支：`codex/backup-feature-apostate-local-kernel-20261021-78f0747`
+本次代码/CI commit：`4db9f08b9de1b41d95412c496327a70f69f11fd6`  
+本地提交备份：`codex/backup-feature-apostate-local-kernel-20261021-da5dbdc`（`da5dbdc6f4abe05f586abd37fad822006e31b561`）  
+原基线备份：`codex/backup-feature-apostate-local-kernel-20261021-78f0747`
 
 ## 结论
 
@@ -52,8 +54,12 @@
 
 ## CI 与后续条件
 
-失败的基线运行：[GitHub Actions run 39540726609](https://github.com/alert0/abcBrowser/actions/runs/39540726609)。该运行已确认官方 SHA 与布局，但没有上传嵌入式 manifest、sxstrace 或完整启动诊断。此次脚本已改为上传完整 evidence 目录；更新后的 CI 运行链接和结果待提交触发后补录。
+本次代码提交 `4db9f08b9de1b41d95412c496327a70f69f11fd6` 的 Windows x64 workflow [#24](https://github.com/alert0/abcBrowser/actions/runs/39550166000) 成功：依赖安装、TypeScript 检查、单元测试、应用构建、Windows x64 打包及构建 artifact 上传全部通过。
 
-本机 `npm ci` 因已有 Electron 进程占用 `node_modules` 中的 `d3dcompiler_47.dll` 返回 EPERM；没有结束那些进程，也没有删除依赖目录。`npm test` 随后因依赖安装不完整、`tsc` 缺失而无法执行。独立 Windows x64 workflow 会在干净 Runner 上分别运行单测、应用构建和真实内核验收；各项结果需以 CI 实际输出为准。
+同一提交的 [Apostate Runtime Acceptance #5](https://github.com/alert0/abcBrowser/actions/runs/39550166007) 按预期失败：官方 ZIP SHA-256、运行时布局和嵌入式依赖检查通过；ZIP 中版本化外部 manifest 数量为 0；`chrome.exe --version` 仍因 SideBySide 缺少程序集 `155.0.8059.31` 失败。Windows Runner 成功采集并解析 `sxstrace`。Explain 与所有浏览器 API/指纹行为测试因启动失败均标为 UNVERIFIED，没有被记为通过。
 
-完整验收仍需：上游提供修复后的、与 `chrome.exe` 同构建生成的 Windows 包；在真实启动通过后重跑 `--version`、Host/Seed/Custom Profile 浏览器 API、GPU/WebGL/Canvas、HTTP header 和受控 ICE 网络测试。物理 GPU 与可控 STUN/TURN 环境不可用时，对应项目继续标为 BLOCKED/UNVERIFIED。
+Runtime Acceptance 上传的 [完整 evidence artifact](https://github.com/alert0/abcBrowser/actions/runs/39550166007/artifacts/12323326654) 含 14 个文件，大小 17,546 bytes，ZIP SHA-256：`babd2cdccef5284eec18b47e8e8aba8b3e1b6f38ade9f918e9e937ed54ea85fd`。本地原始复现中 `sxstrace` 因未提升权限而 UNVERIFIED；CI artifact 补充了提升 Runner 上的 trace 与解析文本。CI 原始证据中的机器信息与本机不同，详情以 artifact 内的 `environment.json` 为准。
+
+本机 `npm ci` 因已有 Electron 进程占用 `node_modules` 中的 `d3dcompiler_47.dll` 返回 EPERM；没有结束那些进程，也没有删除依赖目录。本地 `npm test` 随后因依赖不完整而无法执行，但干净 Windows Runner 上对应单测、应用构建和打包已全通过。
+
+完整真实验收仍需上游提供包含与 `chrome.exe` 同构建生成的 Windows SxS manifest 的修复包；之后重跑 `--version`、Host/Seed/Custom Profile 浏览器 API、GPU/WebGL/Canvas、HTTP header 和受控 ICE 网络测试。物理 GPU 与可控 STUN/TURN 环境不可用时，对应项目继续标为 BLOCKED/UNVERIFIED。

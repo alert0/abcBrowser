@@ -1,14 +1,17 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "capturedAtUtc": "2026-10-21T05:26:07.8505805Z",
   "repository": {
     "name": "alert0/abcBrowser",
     "branch": "feature/apostate-local-kernel",
     "sourceCommit": "78f074730e433ea3d03f3a2c84f29cdd54e6cc90",
-    "backupBranch": "codex/backup-feature-apostate-local-kernel-20261021-78f0747",
+    "backupBranch": "codex/backup-feature-apostate-local-kernel-20261021-da5dbdc",
     "sourceWorktreeDirty": true,
     "acceptanceScriptSha256": "376dfa79fd1b0e06fe333096335a0090cdf309198ba0b00724818787a26da790",
-    "probeServerSha256": "100ab5460c617e9dc651cd7866000c7582ca916c7e05f8660b03fd39080b84c1"
+    "probeServerSha256": "100ab5460c617e9dc651cd7866000c7582ca916c7e05f8660b03fd39080b84c1",
+    "baselineBackupBranch": "codex/backup-feature-apostate-local-kernel-20261021-78f0747",
+    "localBackupCommit": "da5dbdc6f4abe05f586abd37fad822006e31b561",
+    "implementationCommit": "4db9f08b9de1b41d95412c496327a70f69f11fd6"
   },
   "release": {
     "repository": "heretic-tech/apostate",
@@ -70,12 +73,31 @@
     "reason": "StartTrace failed in a non-elevated session; no ETL trace was produced."
   },
   "checks": [
-    { "name": "official release SHA-256", "status": "PASS" },
-    { "name": "complete runtime layout", "status": "PASS" },
-    { "name": "chrome.exe embedded SxS dependency", "status": "PASS" },
-    { "name": "release ZIP versioned SxS manifest", "status": "FAIL" },
-    { "name": "chrome.exe --version startup", "status": "FAIL" },
-    { "name": "fingerprint explain and page API checks", "status": "UNVERIFIED", "reason": "Stopped before any runtime probes because Windows activation failed." }
+    {
+      "name": "official release SHA-256",
+      "status": "PASS"
+    },
+    {
+      "name": "complete runtime layout",
+      "status": "PASS"
+    },
+    {
+      "name": "chrome.exe embedded SxS dependency",
+      "status": "PASS"
+    },
+    {
+      "name": "release ZIP versioned SxS manifest",
+      "status": "FAIL"
+    },
+    {
+      "name": "chrome.exe --version startup",
+      "status": "FAIL"
+    },
+    {
+      "name": "fingerprint explain and page API checks",
+      "status": "UNVERIFIED",
+      "reason": "Stopped before any runtime probes because Windows activation failed."
+    }
   ],
   "upstreamPackagingSource": [
     {
@@ -91,5 +113,36 @@
       "finding": "Windows required and optional staging lists omit the versioned external SxS manifest."
     }
   ],
-  "localRawEvidenceDirectory": "%TEMP%\\apostate-native-acceptance\\evidence\\20261021T052652Z"
+  "localRawEvidenceDirectory": "%TEMP%\\apostate-native-acceptance\\evidence\\20261021T052652Z",
+  "ci": {
+    "recordedAtUtc": "2026-10-21T05:36:00Z",
+    "commit": "4db9f08b9de1b41d95412c496327a70f69f11fd6",
+    "windowsX64": {
+      "runId": 39550166000,
+      "url": "https://github.com/alert0/abcBrowser/actions/runs/39550166000",
+      "conclusion": "success",
+      "checks": [
+        "dependency install",
+        "typecheck",
+        "unit tests",
+        "application build",
+        "Windows x64 packaging",
+        "build artifact upload"
+      ]
+    },
+    "runtimeAcceptance": {
+      "runId": 39550166007,
+      "url": "https://github.com/alert0/abcBrowser/actions/runs/39550166007",
+      "conclusion": "failure",
+      "reason": "Official v0.5.1 ZIP omits the versioned SxS manifest required by chrome.exe; startup failure is reproduced.",
+      "sxstrace": "PASS: activation trace parsed on Windows Runner.",
+      "artifact": {
+        "id": 12323326654,
+        "url": "https://github.com/alert0/abcBrowser/actions/runs/39550166007/artifacts/12323326654",
+        "fileCount": 14,
+        "sizeBytes": 17546,
+        "sha256": "babd2cdccef5284eec18b47e8e8aba8b3e1b6f38ade9f918e9e937ed54ea85fd"
+      }
+    }
+  }
 }
