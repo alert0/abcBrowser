@@ -584,7 +584,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           <Form.Item
             name={['fingerprint', 'networkIdentityMode']}
             label={t("网络身份")}
-            extra={t("自动模式会在启动前检测代理并匹配语言和时区；当前不模拟浏览器 Geolocation API。")}
+            extra="自动模式会在启动前检测代理并匹配语言和时区；当前不模拟浏览器 Geolocation API。"
           >
             <Select disabled={customProfileEnabled || selectedHardware?.hostMatched} options={[
               { value: 'proxy', label: t("跟随代理出口（推荐）") },

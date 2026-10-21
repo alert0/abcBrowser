@@ -147,6 +147,7 @@ describe('profile validation', () => {
 
     const rendererWithoutAnchor = defaultProfileDraft()
     rendererWithoutAnchor.fingerprint.hardwareProfileId = 'legacy-custom'
+    rendererWithoutAnchor.fingerprint.gpuAnchor = 'auto'
     rendererWithoutAnchor.fingerprint.gpuRenderer = 'ANGLE renderer'
     expect(() => validateProfileDraft(rendererWithoutAnchor)).toThrow('固定 GPU 家族')
   })

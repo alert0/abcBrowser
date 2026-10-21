@@ -36,6 +36,8 @@ describe('Apostate adapter', () => {
 
   it('uses Apostate host mode without contradictory per-field overrides', () => {
     const next = profile()
+    next.fingerprint.hardwareProfileId = process.platform === 'win32' ? 'windows-host' : 'macos-host'
+    next.fingerprint.platform = process.platform === 'win32' ? 'windows' : 'macos'
     next.fingerprint.deviceMemoryGb = 16
     next.fingerprint.gpuAnchor = 'windows-d3d11-nvidia-0947761dfbe9'
     next.fingerprint.gpuRenderer = 'ANGLE renderer'
