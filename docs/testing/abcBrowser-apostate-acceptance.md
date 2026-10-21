@@ -96,4 +96,18 @@ node tools/apostate-runtime-acceptance/local.mjs --executable "C:\path\to\existi
 
 既有 [Windows build workflow](https://github.com/alert0/abcBrowser/actions/workflows/windows.yml) 与 [官方 ZIP runtime workflow](https://github.com/alert0/abcBrowser/actions/workflows/apostate-runtime-acceptance.yml) 分开判断。旧 CI 报告见 [历史记录](apostate-runtime-acceptance.md)。官方 ZIP 的 SxS 启动失败不能否定本地已导入二进制的上述实测，也不能由本机可运行反推官方 ZIP 已修复。本次未修改 CI 的内核发布/打包方式。
 
-提交与 CI 具体运行链接在交付消息列出；最终 evidence 中的 sourceCommit 是运行时基线，dirtyPaths 与代码 diff 用于对应尚未提交的本次修改，避免冒充已提交版本的干净运行。
+代码与证据提交：`2c62372649ecc176fd672a002d1881b82e740aa3`。本地完整测试为 208 PASS / 2 skipped，build/typecheck 通过。最终 evidence 中的 sourceCommit 是运行时基线，dirtyPaths 与代码 diff 对应当时尚未提交的本次修改，避免冒充已提交版本的干净运行。
+
+推送 **BLOCKED**：Git Credential Manager 等待凭据，停止等待后以禁止交互方式重试，明确返回 `fatal: Cannot prompt because user interactivity has been disabled` / `unable to get password from user`。远端分支仍为 `a9dfaeb29e0bff4f8a520e214e8ffcfdbb8eadf9`，本次新 CI 未运行，不能报告通过。身份认证恢复后可执行 `git push origin feature/apostate-local-kernel`，再查看上述两个 workflow。历史 [Windows CI 成功](https://github.com/alert0/abcBrowser/actions/runs/39550870924) 仅属于 `a9dfaeb`；[历史官方 ZIP 启动失败](https://github.com/alert0/abcBrowser/actions/runs/39550166007) 属于 `4db9f08`，均非本次代码的新结果。
+
+## abcBrowser 修改文件
+
+- `src/main/engines/apostate/adapter.ts`、`adapter.test.ts`、`capabilities.ts`、`types.ts`：参数、边界、互斥、能力描述与回归测试。
+- `src/main/host-hardware.ts`、`host-hardware.test.ts`：真实宿主资源精度及单核/高核数测试。
+- `src/shared/apostate-profile-validation.ts`、对应 `.test.ts`：schema 属性查找与空设备配置拒绝。
+- `src/shared/validation.ts`、对应 `.test.ts`：Seed=0 在模式间的保存约束。
+- `src/shared/hardware-profiles.ts`、`src/renderer/src/ProfileEditor.tsx`：遗留 GPU metadata/精确型号声明及 Custom 语言限制提示。
+- `tools/apostate-runtime-acceptance/local.mjs`、`run.ps1`：现有本地二进制验收及旧脚本语义纠正。
+- 本报告与 `docs/testing/evidence/`：原始输出、配置/代码差异、环境、测试 JSON 和截图。
+
+`src/main/launch-args.ts` 是对 adapter 的薄委托，已通过该入口执行真实验收，无需改动。`src/shared/apostate-profile.schema.json` 保持原样；schema 本身允许空对象，而应用层为避免模式歧义明确收紧。
