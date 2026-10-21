@@ -42,10 +42,12 @@ jobs:
             throw "VC++ Redistributable installer signature is not valid Microsoft code: $($signature.Status); $($signature.SignerCertificate.Subject)"
           }
           $process = Start-Process -FilePath $installer -ArgumentList '/install','/quiet','/norestart' -Wait -PassThru
-          if ($process.ExitCode -notin @(0, 3010)) {
+          # 1638 means another version is already installed. Continue to the
+          # real Apostate launch test, which verifies whether the runtime is usable.
+          if ($process.ExitCode -notin @(0, 3010, 1638)) {
             throw "VC++ Redistributable installation failed with exit code $($process.ExitCode)"
           }
-          Write-Host "PASS Microsoft VC++ Redistributable x64 installer (exit $($process.ExitCode))"
+          Write-Host "PASS Microsoft VC++ Redistributable x64 installer (exit $($process.ExitCode)); 1638 means an existing version will be validated by runtime acceptance."
 
       - name: Run pinned Apostate v0.5.1 acceptance
         shell: pwsh
