@@ -163,6 +163,8 @@ export interface FingerprintConfig {
   gpuRenderer?: string
   /** Enables Apostate's deterministic Canvas/WebGL readback noise. */
   canvasWebglNoise?: boolean
+  /** Optional Apostate v3 authored profile JSON; replaces seed composition when non-empty. */
+  apostateProfileJson?: string
   language: string
   acceptLanguages: string
   timezone: string

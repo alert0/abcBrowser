@@ -332,7 +332,9 @@ export function effectiveGpuIdentity(
 }
 
 export function refreshSeededGpuIdentity(config: FingerprintConfig): FingerprintConfig {
-  return applyHardwareProfile(config, config.hardwareProfileId, { refreshSeededGpu: true })
+  const refreshed = applyHardwareProfile(config, config.hardwareProfileId, { refreshSeededGpu: true })
+  // A seed refresh must not silently replace a user-pinned Apostate GPU family/renderer.
+  return { ...refreshed, gpuAnchor: config.gpuAnchor, gpuRenderer: config.gpuRenderer }
 }
 
 export function effectiveDisabledSpoofing(config: FingerprintConfig): FingerprintConfig['disabledSpoofing'] {

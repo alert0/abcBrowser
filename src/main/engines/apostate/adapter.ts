@@ -1,6 +1,7 @@
 import type { BrowserProfile } from '../../../shared/types'
 import { effectiveFingerprintSeed, hardwareProfile } from '../../../shared/hardware-profiles'
 import { effectiveNetworkIdentity } from '../../../shared/network-identity'
+import { validateApostateProfileJson } from '../../../shared/apostate-profile-validation'
 import {
   apostateAnchorForHardwareProfile,
   APOSTATE_ENGINE_ID,
@@ -26,12 +27,13 @@ function assertSafeLocale(value: string): string {
 export function assertApostateCompatible(profile: BrowserProfile): void {
   const fp = profile.fingerprint
   const hardware = hardwareProfile(fp.hardwareProfileId)
+  const authoredProfileJson = validateApostateProfileJson(fp.apostateProfileJson ?? '')
   const hostPlatform = process.platform === 'win32' ? 'windows' : 'macos'
-  const hostMode = hardware?.hostMatched === true
-  if (hostMode && hardware.platform !== hostPlatform) {
+  const hostMode = !authoredProfileJson && hardware?.hostMatched === true
+  if (!authoredProfileJson && hostMode && hardware?.platform !== hostPlatform) {
     throw new Error('Apostate 主机模式只能选择与当前宿主系统一致的本机硬件模板')
   }
-  if (fp.disabledSpoofing.length && !hostMode) {
+  if (!authoredProfileJson && fp.disabledSpoofing.length && !hostMode) {
     throw new Error('Apostate 不支持 Prism 的“关闭部分伪装”配置，请清空该配置后再启动')
   }
   if (fp.webrtcPolicy === 'public_only') {
@@ -43,10 +45,13 @@ export function buildApostateLaunchArgs(profile: BrowserProfile, options: Aposta
   assertApostateCompatible(profile)
   const fp = profile.fingerprint
   const hardware = hardwareProfile(fp.hardwareProfileId)
-  const hostMode = hardware?.hostMatched === true
+  const authoredProfileJson = validateApostateProfileJson(fp.apostateProfileJson ?? '')
+  const hostMode = !authoredProfileJson && hardware?.hostMatched === true
   const args = [`--user-data-dir=${options.userDataDir}`]
 
-  if (hostMode) {
+  if (authoredProfileJson) {
+    args.push(`--apostate-profile=${Buffer.from(authoredProfileJson, 'utf8').toString('base64')}`)
+  } else if (hostMode) {
     // Apostate host mode composes nothing. Do not send per-field overrides.
     args.push('--fingerprint=host')
   } else {
@@ -82,12 +87,19 @@ export function buildApostateLaunchArgs(profile: BrowserProfile, options: Aposta
     if (fp.canvasWebglNoise) args.push('--fingerprint-noise')
   }
 
+  const authoredScreen = authoredProfileJson
+    ? JSON.parse(authoredProfileJson) as { screen?: { width?: number; height?: number } }
+    : undefined
   const windowWidth = profile.window.mode === 'custom'
     ? profile.window.width
-    : hostMode ? profile.window.width : fp.screenWidth
+    : authoredProfileJson
+      ? Math.min(profile.window.width, authoredScreen?.screen?.width ?? profile.window.width)
+      : hostMode ? profile.window.width : fp.screenWidth
   const windowHeight = profile.window.mode === 'custom'
     ? profile.window.height
-    : hostMode ? profile.window.height : fp.screenHeight
+    : authoredProfileJson
+      ? Math.min(profile.window.height, authoredScreen?.screen?.height ?? profile.window.height)
+      : hostMode ? profile.window.height : fp.screenHeight
   args.push(
     `--window-size=${windowWidth},${windowHeight}`,
     `--window-name=${profileWindowName(profile)}`,

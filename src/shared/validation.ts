@@ -1,4 +1,5 @@
 import { applyHardwareProfile, defaultApostateGpuAnchor, HARDWARE_PROFILES } from './hardware-profiles'
+import { validateApostateProfileJson } from './apostate-profile-validation'
 import type { ApostateGpuAnchor, HardwareProfileId, ProfileDraft, ProxyConfig } from './types'
 import { domainToASCII } from 'node:url'
 import { isIP } from 'node:net'
@@ -59,18 +60,23 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft {
   }
 
   const rawFp = draft.fingerprint
+  if (rawFp.apostateProfileJson !== undefined && typeof rawFp.apostateProfileJson !== 'string') {
+    throw new Error('Apostate Profile 必须是 JSON 文本')
+  }
+  const apostateProfileJson = validateApostateProfileJson(rawFp.apostateProfileJson ?? '')
   const hardwareProfileId = (rawFp.hardwareProfileId ?? 'legacy-custom') as HardwareProfileId
   const allowedHardwareProfiles = new Set<HardwareProfileId>(['legacy-custom', ...HARDWARE_PROFILES.map((profile) => profile.id)])
   if (!allowedHardwareProfiles.has(hardwareProfileId)) throw new Error('硬件模板无效')
   const fp = applyHardwareProfile({ ...rawFp, hardwareProfileId }, hardwareProfileId)
   const selectedHardware = HARDWARE_PROFILES.find((profile) => profile.id === hardwareProfileId)
-  const deviceMemoryGb = selectedHardware?.hostMatched
+  const customProfileActive = Boolean(apostateProfileJson)
+  const deviceMemoryGb = customProfileActive || selectedHardware?.hostMatched
     ? undefined
     : (fp.deviceMemoryGb ?? selectedHardware?.physicalMemoryGb ?? 8)
   if (deviceMemoryGb !== undefined && (!Number.isInteger(deviceMemoryGb) || deviceMemoryGb < 1 || deviceMemoryGb > 4096)) {
     throw new Error('设备内存必须是 1–4096 GiB 的整数')
   }
-  const gpuAnchor = selectedHardware?.hostMatched
+  const gpuAnchor = customProfileActive || selectedHardware?.hostMatched
     ? 'auto'
     : (fp.gpuAnchor ?? defaultApostateGpuAnchor(selectedHardware))
   const allowedGpuAnchors = new Set<ApostateGpuAnchor>([
@@ -85,7 +91,7 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft {
   if (gpuAnchor !== 'auto' && !gpuAnchor.startsWith(expectedAnchorPrefix)) {
     throw new Error('Apostate GPU 家族必须与所选平台一致')
   }
-  const gpuRenderer = typeof fp.gpuRenderer === 'string' ? fp.gpuRenderer.trim() : ''
+  const gpuRenderer = customProfileActive ? '' : (typeof fp.gpuRenderer === 'string' ? fp.gpuRenderer.trim() : '')
   if (gpuRenderer.length > 512 || /[\u0000-\u001f\u007f]/.test(gpuRenderer)) {
     throw new Error('Apostate GPU renderer 配置无效或过长')
   }
@@ -95,7 +101,7 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft {
   if (fp.canvasWebglNoise !== undefined && typeof fp.canvasWebglNoise !== 'boolean') {
     throw new Error('Canvas/WebGL 读取噪声配置无效')
   }
-  const canvasWebglNoise = selectedHardware?.hostMatched ? false : (fp.canvasWebglNoise ?? false)
+  const canvasWebglNoise = customProfileActive || selectedHardware?.hostMatched ? false : (fp.canvasWebglNoise ?? false)
   if (!['windows', 'macos'].includes(fp.platform) || !['Chrome', 'Edge'].includes(fp.brand)) {
     throw new Error('指纹平台或浏览器品牌无效')
   }
@@ -181,6 +187,7 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft {
       gpuAnchor,
       gpuRenderer: gpuRenderer || undefined,
       canvasWebglNoise,
+      apostateProfileJson: apostateProfileJson || undefined,
       platform: fp.platform,
       language: fp.language.trim(),
       acceptLanguages: fp.acceptLanguages.trim(),

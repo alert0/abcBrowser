@@ -603,6 +603,9 @@ export class BrowserLauncher {
 
   async explainFingerprint(id: string): Promise<string> {
     const profile = this.profiles.get(id)
+    if (profile.fingerprint.apostateProfileJson?.trim()) {
+      throw new Error('自定义 Apostate Profile v3 会替代种子组合；请通过网页运行时检查核验，--fingerprint-explain 不提供该模式的组合报告')
+    }
     const engine = await locateBrowserForProfile(this.settings, this.profiles.vaultPath, profile.kernelVersion)
     if (!engine.executable) throw new Error(engine.label)
     if (!engine.fingerprintKernel || engine.version !== APOSTATE_CHROMIUM_VERSION) {

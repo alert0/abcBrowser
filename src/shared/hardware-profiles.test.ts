@@ -49,6 +49,18 @@ describe('coherent hardware profiles', () => {
     }
   })
 
+  it('preserves an explicitly pinned Apostate GPU family and renderer when regenerating a seed', () => {
+    const initial = applyHardwareProfile(defaultFingerprint(1), 'windows-seeded-nvidia', { refreshSeededGpu: true })
+    const pinned = {
+      ...initial,
+      gpuAnchor: 'windows-d3d11-nvidia-0947761dfbe9' as const,
+      gpuRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4060)'
+    }
+    const refreshed = refreshSeededGpuIdentity({ ...pinned, seed: 42 })
+    expect(refreshed.gpuAnchor).toBe(pinned.gpuAnchor)
+    expect(refreshed.gpuRenderer).toBe(pinned.gpuRenderer)
+  })
+
   it('turns off injected rendering overrides for host-matched profiles', () => {
     const config = applyHardwareProfile(defaultFingerprint(1), 'macos-host')
     expect(effectiveDisabledSpoofing(config)).toEqual(['font', 'audio', 'canvas', 'clientrects', 'gpu'])

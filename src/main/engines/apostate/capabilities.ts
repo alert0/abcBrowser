@@ -27,6 +27,7 @@ export const APOSTATE_CAPABILITIES: readonly ApostateCapability[] = [
   { key: 'gpuRenderer', status: 'supported', switchName: '--fingerprint-gpu-renderer', note: '精确 renderer 必须属于所选 GPU 家族，内核会校验' },
   { key: 'canvasWebglNoise', status: 'supported', switchName: '--fingerprint-noise', note: '可选、默认关闭；主机模式下无效' },
   { key: 'fingerprintExplain', status: 'supported', switchName: '--fingerprint-explain', note: '打印内核实际组合报告和 limitations，不打开浏览器窗口' },
+  { key: 'customProfile', status: 'supported', switchName: '--apostate-profile', note: '官方 v3 JSON schema；替代 seed composition，未填写字段继承宿主值' }
   { key: 'webrtc', status: 'supported', switchName: '--fingerprint-webrtc-udp', note: 'proxy_only 映射为 block；default 保持内核默认' },
   { key: 'brandVersion', status: 'unsupported', note: '品牌版本由实际 Apostate 二进制决定' },
   { key: 'platformVersion', status: 'unsupported', note: '没有确认的等效启动参数' },
@@ -48,8 +49,9 @@ export function apostateAnchorForHardwareProfile(
   profile: HardwareProfile | undefined,
   configuredAnchor?: ApostateGpuAnchor
 ): string | undefined {
-  if (!profile || profile.hostMatched) return undefined
+  if (profile?.hostMatched) return undefined
   if (configuredAnchor !== undefined) return configuredAnchor === 'auto' ? undefined : configuredAnchor
+  if (!profile) return undefined
   if (profile.platform === 'windows' && /nvidia|rtx/i.test(profile.gpuModel)) {
     return 'windows-d3d11-nvidia-0947761dfbe9'
   }

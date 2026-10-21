@@ -81,6 +81,28 @@ describe('Apostate adapter', () => {
     expect(args.some((arg) => arg.startsWith('--fingerprint-anchor='))).toBe(false)
   })
 
+  it('uses an authored Apostate v3 profile instead of seed and per-field switches', () => {
+    const next = profile()
+    next.fingerprint.hardwareProfileId = 'legacy-custom'
+    next.fingerprint.apostateProfileJson = JSON.stringify({
+      cpu: { logical_cores: 8 },
+      locale: { application: 'en-GB', timezone: 'Europe/London' }
+    })
+    next.fingerprint.gpuAnchor = 'auto'
+    next.fingerprint.gpuRenderer = undefined
+    next.fingerprint.canvasWebglNoise = true
+    const args = buildApostateLaunchArgs(next, { userDataDir: 'C:\\profiles\\authored' })
+    const profileArg = args.find((arg) => arg.startsWith('--apostate-profile='))
+    expect(profileArg).toBeDefined()
+    expect(Buffer.from(profileArg!.slice('--apostate-profile='.length), 'base64').toString('utf8'))
+      .toBe(JSON.stringify(JSON.parse(next.fingerprint.apostateProfileJson!)))
+    expect(args.some((arg) => arg.startsWith('--fingerprint=') && arg !== '--fingerprint=host')).toBe(false)
+    expect(args.some((arg) => arg.startsWith('--fingerprint-platform='))).toBe(false)
+    expect(args.some((arg) => arg.startsWith('--fingerprint-anchor='))).toBe(false)
+    expect(args.some((arg) => arg.startsWith('--fingerprint-device-memory='))).toBe(false)
+    expect(args).not.toContain('--fingerprint-noise')
+  })
+
   it('does not silently translate public_only WebRTC semantics', () => {
     const next = profile()
     next.fingerprint.webrtcPolicy = 'public_only'

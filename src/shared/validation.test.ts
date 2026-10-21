@@ -114,6 +114,12 @@ describe('profile validation', () => {
     expect(() => validateProfileDraft(exitDraft)).toThrow('出口变化')
   })
 
+  it('stores a validated Apostate v3 profile as compact JSON', () => {
+    const draft = defaultProfileDraft()
+    draft.fingerprint.apostateProfileJson = '{ "cpu": { "logical_cores": 8 } }'
+    expect(validateProfileDraft(draft).fingerprint.apostateProfileJson).toBe('{"cpu":{"logical_cores":8}}')
+  })
+
   it('validates Apostate memory, GPU family, renderer and noise settings', () => {
     const draft = defaultProfileDraft()
     draft.fingerprint.hardwareProfileId = 'legacy-custom'

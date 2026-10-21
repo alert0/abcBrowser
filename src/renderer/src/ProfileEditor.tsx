@@ -70,6 +70,7 @@ function editorValues(profile: BrowserProfileView | undefined, index: number): E
     proxy: { ...draft.proxy },
     fingerprint: {
       ...fingerprint,
+      apostateProfileJson: fingerprint.apostateProfileJson ?? '',
       deviceMemoryGb: selectedHardware?.hostMatched ? undefined : (fingerprint.deviceMemoryGb ?? selectedHardware?.physicalMemoryGb ?? 8),
       gpuAnchor: selectedHardware?.hostMatched ? 'auto' : (fingerprint.gpuAnchor ?? defaultApostateGpuAnchor(selectedHardware)),
       gpuRenderer: fingerprint.gpuRenderer ?? undefined,
@@ -100,6 +101,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const hardwareProfileId = Form.useWatch(['fingerprint', 'hardwareProfileId'], form) ?? 'legacy-custom'
   const fingerprintPlatform = Form.useWatch(['fingerprint', 'platform'], form) ?? defaultPlatform()
   const fingerprintGpuAnchor = Form.useWatch(['fingerprint', 'gpuAnchor'], form) ?? 'auto'
+  const apostateProfileJson = Form.useWatch(['fingerprint', 'apostateProfileJson'], form) ?? ''
+  const customProfileEnabled = apostateProfileJson.trim().length > 0
   const fingerprintSeed = Form.useWatch(['fingerprint', 'seed'], form) ?? 0
   const fingerprintGpuBucket = Form.useWatch(['fingerprint', 'gpuBucket'], form)
   const kernelVersion = Form.useWatch('kernelVersion', form) ?? ''
@@ -435,6 +438,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         extra={t("请选择完整硬件组合，避免出现不合理的设备信息。")}
       >
         <Select
+          disabled={customProfileEnabled}
           options={[
             ...HARDWARE_PROFILES.map((item) => ({
               value: item.id,
@@ -449,7 +453,25 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           }}
         />
       </Form.Item>
-      {selectedHardware?.hostMatched && (
+      <Form.Item
+        name={['fingerprint', 'apostateProfileJson']}
+        label="Apostate 自定义 Profile v3（JSON）"
+        extra="填写官方 v3 JSON 后将使用 --apostate-profile；留空则使用下面的种子/主机模式。JSON 最大 12 KiB。"
+      >
+        <Input.TextArea
+          autoSize={{ minRows: 4, maxRows: 12 }}
+          placeholder='{"cpu":{"logical_cores":8},"locale":{"application":"en-US","timezone":"America/New_York"}}'
+        />
+      </Form.Item>
+      {customProfileEnabled && (
+        <Alert
+          type="warning"
+          showIcon
+          message="Apostate 自定义 Profile v3 已启用"
+          description="自定义 profile 会替代种子组合；JSON 中未填写的字段继承宿主值。下方硬件模板、种子、GPU、内存、语言和时区字段不会传给内核。请用网页运行时检查核验，explain 报告不适用于此模式。"
+        />
+      )}
+      {selectedHardware?.hostMatched && !customProfileEnabled && (
         <Alert
           type="success"
           showIcon
@@ -457,7 +479,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           description={t("不同环境可能显示相同的硬件信息。")}
         />
       )}
-      {selectedHardware && !selectedHardware.hostMatched && (
+      {selectedHardware && !selectedHardware.hostMatched && !customProfileEnabled && (
         <Alert
           type="info"
           showIcon
@@ -477,7 +499,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         extra="auto 表示由种子选择；固定家族后可选填精确 WebGL renderer。"
       >
         <Select
-          disabled={selectedHardware?.hostMatched}
+          disabled={customProfileEnabled || selectedHardware?.hostMatched}
           options={gpuAnchorOptions}
           onChange={() => form.setFieldValue(['fingerprint', 'gpuRenderer'], undefined)}
         />
@@ -487,9 +509,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         label="WebGL GPU Renderer（可选）"
         extra="必须使用 Apostate GPU catalogue 中与所选家族一致的完整 renderer 字符串；不匹配时内核会拒绝启动。"
       >
-        <Input disabled={selectedHardware?.hostMatched || fingerprintGpuAnchor === 'auto'} placeholder="ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 …)" />
+        <Input disabled={customProfileEnabled || selectedHardware?.hostMatched || fingerprintGpuAnchor === 'auto'} placeholder="ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 …)" />
       </Form.Item>
-      {selectedHardware?.renderIdentityMode === 'seeded-curated' && !selectedGpuIdentity && (
+      {selectedHardware?.renderIdentityMode === 'seeded-curated' && !customProfileEnabled && !selectedGpuIdentity && (
         <Alert
           type="warning"
           showIcon
@@ -497,7 +519,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           description={t("如需更换，请点击下方“重新生成”。")}
         />
       )}
-      {hardwareProfileId === 'legacy-custom' && (
+      {hardwareProfileId === 'legacy-custom' && !customProfileEnabled && (
         <Alert
           type="warning"
           showIcon
@@ -509,12 +531,12 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       <Row gutter={12}>
         <Col span={16}>
           <Form.Item name={['fingerprint', 'seed']} label={t("指纹种子")} rules={[{ required: true }]}>
-            <InputNumber disabled={selectedHardware?.hostMatched} min={0} max={0xffffffff} precision={0} className="full-width" />
+            <InputNumber disabled={customProfileEnabled || selectedHardware?.hostMatched} min={0} max={0xffffffff} precision={0} className="full-width" />
           </Form.Item>
         </Col>
         <Col span={8} className="seed-action">
           <Button
-            disabled={selectedHardware?.hostMatched}
+            disabled={customProfileEnabled || selectedHardware?.hostMatched}
             icon={<ReloadOutlined />}
             onClick={() => {
               const current = form.getFieldValue('fingerprint')
@@ -531,7 +553,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           ? t("不同环境可能共享当前设备的硬件信息。")
           : t("指纹种子决定环境身份。使用中的环境请勿随意修改；复制或重新生成会获得新身份。")}
       </div>
-      {selectedHardware?.hostMatched ? (
+      {selectedHardware?.hostMatched && !customProfileEnabled ? (
         <Alert type="info" showIcon message="设备内存：本机自动" description="主机模式不应用合成内存值，保留真实主机身份。" />
       ) : (
         <Form.Item
@@ -539,7 +561,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           label="设备内存（GiB）"
           extra="Apostate 的 --fingerprint-device-memory；超过宿主物理内存的值会在启动前保守限制。硬件模板会固定该值。"
         >
-          <InputNumber min={1} max={4096} precision={0} disabled={hardwareProfileId !== 'legacy-custom'} className="full-width" />
+          <InputNumber min={1} max={4096} precision={0} disabled={customProfileEnabled || hardwareProfileId !== 'legacy-custom'} className="full-width" />
         </Form.Item>
       )}
       <Form.Item
@@ -548,7 +570,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         label="Canvas / WebGL 读取噪声"
         extra="Apostate 特有的可选像素读取噪声，默认关闭；可能被专门测试检测到，主机模式下无效。"
       >
-        <Switch disabled={selectedHardware?.hostMatched} />
+        <Switch disabled={customProfileEnabled || selectedHardware?.hostMatched} />
       </Form.Item>
       <Divider />
       <Alert
@@ -564,7 +586,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             label={t("网络身份")}
             extra={t("自动模式会在启动前检测代理并匹配语言和时区；当前不模拟浏览器 Geolocation API。")}
           >
-            <Select disabled={selectedHardware?.hostMatched} options={[
+            <Select disabled={customProfileEnabled || selectedHardware?.hostMatched} options={[
               { value: 'proxy', label: t("跟随代理出口（推荐）") },
               { value: 'manual', label: t("手动固定") }
             ]} />
@@ -579,7 +601,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           </Form.Item>
         </Col>
       </Row>
-      {networkIdentityMode === 'proxy' && !selectedHardware?.hostMatched && (
+      {networkIdentityMode === 'proxy' && !selectedHardware?.hostMatched && !customProfileEnabled && (
         <Alert
           type={proxyProtocol === 'direct' ? 'warning' : 'info'}
           showIcon
@@ -592,18 +614,18 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       <Row gutter={12}>
         <Col span={12}>
           <Form.Item name={['fingerprint', 'hardwareConcurrency']} label={t("CPU 核心数")}>
-            <Select disabled={hardwareProfileId !== 'legacy-custom'} options={[2, 4, 6, 8, 10, 12, 14, 16, 20, 24].map((value) => ({ value, label: t("{0} 核", value) }))} />
+            <Select disabled={customProfileEnabled || hardwareProfileId !== 'legacy-custom'} options={[2, 4, 6, 8, 10, 12, 14, 16, 20, 24].map((value) => ({ value, label: t("{0} 核", value) }))} />
           </Form.Item>
         </Col>
         <Col span={12}>
           <Form.Item label={t("屏幕分辨率")}>
             <Space.Compact block>
               <Form.Item name={['fingerprint', 'screenWidth']} noStyle>
-                <InputNumber disabled={hardwareProfileId !== 'legacy-custom'} min={800} max={7680} precision={0} className="resolution-input" />
+                <InputNumber disabled={customProfileEnabled || hardwareProfileId !== 'legacy-custom'} min={800} max={7680} precision={0} className="resolution-input" />
               </Form.Item>
               <Input className="resolution-times" value="×" disabled />
               <Form.Item name={['fingerprint', 'screenHeight']} noStyle>
-                <InputNumber disabled={hardwareProfileId !== 'legacy-custom'} min={600} max={4320} precision={0} className="resolution-input" />
+                <InputNumber disabled={customProfileEnabled || hardwareProfileId !== 'legacy-custom'} min={600} max={4320} precision={0} className="resolution-input" />
               </Form.Item>
             </Space.Compact>
           </Form.Item>
@@ -612,17 +634,17 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       <Row gutter={12}>
         <Col span={12}>
           <Form.Item name={['fingerprint', 'language']} label={t("界面语言")}>
-            <Input disabled={selectedHardware?.hostMatched || (networkIdentityMode === 'proxy' && proxyProtocol !== 'direct')} placeholder="zh-CN" />
+            <Input disabled={customProfileEnabled || selectedHardware?.hostMatched || (networkIdentityMode === 'proxy' && proxyProtocol !== 'direct')} placeholder="zh-CN" />
           </Form.Item>
         </Col>
         <Col span={12}>
           <Form.Item name={['fingerprint', 'timezone']} label={t("时区")}>
-            <Input disabled={selectedHardware?.hostMatched || (networkIdentityMode === 'proxy' && proxyProtocol !== 'direct')} placeholder="Asia/Shanghai" />
+            <Input disabled={customProfileEnabled || selectedHardware?.hostMatched || (networkIdentityMode === 'proxy' && proxyProtocol !== 'direct')} placeholder="Asia/Shanghai" />
           </Form.Item>
         </Col>
       </Row>
       <Form.Item name={['fingerprint', 'acceptLanguages']} label="Accept-Language">
-        <Input disabled={selectedHardware?.hostMatched || (networkIdentityMode === 'proxy' && proxyProtocol !== 'direct')} placeholder="zh-CN,zh,en-US,en" />
+        <Input disabled={customProfileEnabled || selectedHardware?.hostMatched || (networkIdentityMode === 'proxy' && proxyProtocol !== 'direct')} placeholder="zh-CN,zh,en-US,en" />
       </Form.Item>
       <Alert
         type="info"

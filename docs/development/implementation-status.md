@@ -14,6 +14,7 @@
 - 新增 `src/main/engines/apostate/`，集中管理能力声明、版本解析和启动参数。
 - 启动链接入 Apostate 主机模式与种子组合模式；主机模式不叠加平台、CPU、内存、屏幕、语言、时区或 GPU 覆盖。
 - 接入设备内存上限、官方 GPU family anchor、可选 GPU renderer、默认关闭的 Canvas/WebGL 读取噪声和原生 `--fingerprint-explain` 组合报告。
+- 接入 Apostate v3 自定义 Profile JSON：固定上游 schema 快照、拒绝未知字段、压缩 JSON 后 base64 传入 `--apostate-profile`，并确保 authored profile 不与 seed/逐字段覆盖混用。
 - 不再透传品牌版本、旧 GPU bucket、地理位置、旧 render identity 和 selective spoofing 开关。
 - `public_only` WebRTC 不做未经验证的静默映射；启动前给出错误。
 - 本地导入限制在所选 `chrome.exe` 的最多三个父级目录内，要求发现运行时 DLL/资源后才复制。
@@ -35,5 +36,5 @@
 
 - 需要在 Windows x64 桌面环境中使用真实 Apostate `chrome.exe` 完成导入、启动、关闭、重启和数据持久化验收。
 - GPU anchor、renderer、WebRTC 行为、代理协议和浏览器实际暴露值仍需实机运行时证据；代码未将静态参数存在或 explain 输出视为验证通过。
-- 本次新增代码尚未在本会话中运行 TypeScript、Vitest 或 Windows x64 真机测试；应以该分支 CI 结果及真实 Apostate 验收记录为准。
+- 本次新增代码的 TypeScript 检查已由该提交触发的 Windows CI 先行通过；完整单元测试、构建和 Windows x64 真机验收仍需等待结果。真实网页暴露值仍需使用 Apostate 二进制验证。
 - 生产安装包需要在 GitHub Actions 的 Windows runner 上完成实际打包验收。

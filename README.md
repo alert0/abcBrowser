@@ -37,6 +37,7 @@ npm run dist:win
 - Windows x64 目标平台。
 - Apostate 主机模式 `--fingerprint=host`，以及种子模式下的平台、硬件线程数、设备内存、屏幕、语言、时区和 `proxy_only` WebRTC UDP 参数。
 - 官方 GPU 家族 anchor、可选精确 WebGL renderer、默认关闭的 Canvas/WebGL 读取噪声。
+- Apostate v3 自定义 Profile：固定版本的官方 JSON Schema 校验、base64 `--apostate-profile` 启动和模式互斥；未填写的字段继承宿主值。
 - 启动诊断中的 `--fingerprint-explain` 原生组合报告；它说明内核决策和限制，不等于网页运行时验收。
 - 独立环境用户数据目录、代理桥、扩展加载、窗口尺寸、启动网址和进程生命周期管理。
 - 本地内核导入、关键文件 SHA-256 清单、完整性检查、切换和回滚。
@@ -45,7 +46,6 @@ npm run dist:win
 
 - 内核自动下载、在线版本发现和自动更新。
 - macOS/Linux 发布版本。
-- Apostate v3 自定义 profile JSON 的导入、schema 校验和 `--apostate-profile` 接入。
 - 浏览器 Geolocation API 模拟，以及旧 Prism 品牌版本、操作系统版本、数字 GPU bucket、render identity 和 selective spoofing 开关。
 - 未经 Apostate 文档与实机验证的 `public_only` WebRTC 映射。
 - 将静态启动参数存在当作指纹运行时验证通过。
