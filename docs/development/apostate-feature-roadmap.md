@@ -21,6 +21,17 @@ abcBrowser 必须把 Apostate 当作具有原生指纹组合能力的 Chromium �
 | Custom Profile v3 | 已接入代码 | 使用固定的官方 schema 快照校验 JSON；base64 传入 `--apostate-profile`；不与 seed 或逐字段参数混用 |
 | Runtime acceptance | 待完成 | 用真实 Apostate 内核验证 navigator、语言、时区、CPU、内存、屏幕、WebGL/WebGPU、Canvas 和 WebRTC |
 
+## 当前阻塞：Windows 二进制 SideBySide 启动失败
+
+2026-10-21 的 GitHub Actions 运行验收已校验官方 v0.5.1 Windows x64 ZIP 的 SHA-256，并找到完整目录结构，但 `chrome.exe --version` 启动失败。Windows SideBySide 事件报告缺少依赖程序集 `155.0.8059.31`，且相邻目录未发现 `.manifest` 文件。此失败发生在浏览器参数和网页探针运行之前，因此不能归因于或判定指纹参数正确。
+
+下一步：
+
+1. 对官方 ZIP 与 `chrome.exe` 的嵌入 manifest 做检查，并通过 `sxstrace.exe` 采集完整程序集解析日志。
+2. 对比官方构建/打包流程，判断是否缺少发布包文件、外部 manifest，或 Windows 运行时依赖。
+3. 若确认官方资产有缺陷，固定证据并向上游报告；若是 runner 环境依赖，则在 CI 中显式安装并验证该依赖。
+4. 修复前保持运行验收为失败，不允许跳过启动步骤或将 BLOCKED 记为 PASS。
+
 ## 下一阶段：真实内核验收
 
 Apostate 的 `--apostate-profile` 已接入代码：它接受 base64 编码的 JSON，不是文件路径。自定义 profile 替代种子组合；缺失字段继承宿主值。当前限制 JSON 为 12 KiB，避免 Windows 命令行长度问题。接下来必须在真实内核中验收：

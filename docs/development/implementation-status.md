@@ -30,11 +30,12 @@
 | `node node_modules/vitest/vitest.mjs run --fileParallelism=false src/shared src/renderer/src src/main/engines/apostate` | PASS | 10 files，56 tests |
 | `node node_modules/electron-vite/bin/electron-vite.js build` | PASS | main、preload、renderer 均构建成功 |
 | `npm test` 等价完整 Vitest 套件 | BLOCKED | `profile-store.test.ts` 在当前环境启动后无输出并持续挂起，已终止；部分上游生命周期测试依赖桌面进程/外部运行环境 |
-| Windows x64 真实 Apostate 启动 | NOT RUN | 当前环境没有用户提供的 Apostate `chrome.exe` |
+| Windows x64 真实 Apostate 启动 | FAIL / BLOCKED | GitHub Actions 已下载并校验官方 v0.5.1 Windows x64 包（SHA-256 匹配），但 `chrome.exe --version` 无法启动；SideBySide 报告缺少依赖程序集 `155.0.8059.31`。尚未执行到网页运行时指纹断言。详见 [运行验收](https://github.com/alert0/abcBrowser/actions/runs/39532172004)。 |
 
 ## 尚未完成
 
 - 需要在 Windows x64 桌面环境中使用真实 Apostate `chrome.exe` 完成导入、启动、关闭、重启和数据持久化验收。
 - GPU anchor、renderer、WebRTC 行为、代理协议和浏览器实际暴露值仍需实机运行时证据；代码未将静态参数存在或 explain 输出视为验证通过。
-- 本次新增代码的 TypeScript 检查已由该提交触发的 Windows CI 先行通过；完整单元测试、构建和 Windows x64 真机验收仍需等待结果。真实网页暴露值仍需使用 Apostate 二进制验证。
-- 生产安装包需要在 GitHub Actions 的 Windows runner 上完成实际打包验收。
+- 最新 Windows CI 的 TypeScript 检查、单元测试和应用构建已通过；独立的 Windows x64 运行验收因官方二进制 SideBySide 启动错误失败，不能视为产品代码已通过真机验收。
+- 下一步阻塞项是诊断官方 Windows 包的嵌入/外部 manifest 与依赖程序集。不要通过跳过运行测试或将失败降级为 PASS 来隐藏问题。
+- 生产安装包仍需单独完成 Windows x64 打包验收。
