@@ -36,7 +36,7 @@ export function assertApostateCompatible(profile: BrowserProfile): void {
   if (!authoredProfileJson && fp.disabledSpoofing.length && !hostMode) {
     throw new Error('Apostate 不支持 Prism 的“关闭部分伪装”配置，请清空该配置后再启动')
   }
-  if (fp.webrtcPolicy === 'public_only') {
+  if (!authoredProfileJson && !hostMode && fp.webrtcPolicy === 'public_only') {
     throw new Error('Apostate 尚未验证 public_only WebRTC 语义，请改用“代理 UDP”或“内核默认”')
   }
 }

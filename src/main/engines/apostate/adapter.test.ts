@@ -105,6 +105,20 @@ describe('Apostate adapter', () => {
     expect(args).not.toContain('--fingerprint-noise')
   })
 
+  it('ignores legacy WebRTC policy when host or authored profile mode takes precedence', () => {
+    const authored = profile()
+    authored.fingerprint.hardwareProfileId = 'legacy-custom'
+    authored.fingerprint.apostateProfileJson = JSON.stringify({ cpu: { logical_cores: 8 } })
+    authored.fingerprint.webrtcPolicy = 'public_only'
+    expect(() => buildApostateLaunchArgs(authored, { userDataDir: 'C:\\profiles\\authored-webrtc' })).not.toThrow()
+
+    const host = profile()
+    host.fingerprint.hardwareProfileId = process.platform === 'win32' ? 'windows-host' : 'macos-host'
+    host.fingerprint.platform = process.platform === 'win32' ? 'windows' : 'macos'
+    host.fingerprint.webrtcPolicy = 'public_only'
+    expect(() => buildApostateLaunchArgs(host, { userDataDir: 'C:\\profiles\\host-webrtc' })).not.toThrow()
+  })
+
   it('does not silently translate public_only WebRTC semantics', () => {
     const next = profile()
     next.fingerprint.webrtcPolicy = 'public_only'
