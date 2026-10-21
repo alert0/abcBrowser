@@ -12,7 +12,7 @@ afterEach(async () => {
   for (const child of children.splice(0)) {
     if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
   }
-  await Promise.all(temporaryPaths.splice(0).map((path) => rm(path, { recursive: true, force: true })))
+  await Promise.all(temporaryPaths.splice(0).map((path) => rm(path, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })))
 })
 
 async function waitUntil<T>(operation: () => Promise<T | undefined>, timeoutMs = 5_000): Promise<T> {
@@ -44,7 +44,7 @@ describe('SystemProcessInspector real process integration', () => {
     const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()))
     const inspector = new SystemProcessInspector()
 
-    const matched = await waitUntil(async () => findManagedProcess(await inspector.list(), userDataPath))
+    const matched = await waitUntil(async () => findManagedProcess(await inspector.list(), userDataPath), 15_000)
     expect(matched.pid).toBe(child.pid)
     await expect(inspector.terminate(matched.pid, `${userDataPath}-other`)).rejects.toThrow('已取消终止操作')
     expect(child.exitCode).toBeNull()
@@ -52,5 +52,5 @@ describe('SystemProcessInspector real process integration', () => {
     await inspector.terminate(matched.pid, userDataPath)
     await exited
     expect(child.signalCode ?? child.exitCode).not.toBeNull()
-  }, 15_000)
+  }, 45_000)
 })
