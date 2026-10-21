@@ -25,7 +25,13 @@ function assertSafeLocale(value: string): string {
 
 export function assertApostateCompatible(profile: BrowserProfile): void {
   const fp = profile.fingerprint
-  if (fp.disabledSpoofing.length) {
+  const hardware = hardwareProfile(fp.hardwareProfileId)
+  const hostPlatform = process.platform === 'win32' ? 'windows' : 'macos'
+  const hostMode = hardware?.hostMatched === true
+  if (hostMode && hardware.platform !== hostPlatform) {
+    throw new Error('Apostate 主机模式只能选择与当前宿主系统一致的本机硬件模板')
+  }
+  if (fp.disabledSpoofing.length && !hostMode) {
     throw new Error('Apostate 不支持 Prism 的“关闭部分伪装”配置，请清空该配置后再启动')
   }
   if (fp.webrtcPolicy === 'public_only') {
@@ -37,25 +43,53 @@ export function buildApostateLaunchArgs(profile: BrowserProfile, options: Aposta
   assertApostateCompatible(profile)
   const fp = profile.fingerprint
   const hardware = hardwareProfile(fp.hardwareProfileId)
-  const hardwareConcurrency = hardware?.hostMatched && options.hostHardwareConcurrency
-    ? options.hostHardwareConcurrency
-    : fp.hardwareConcurrency
-  const seed = effectiveFingerprintSeed(fp)
-  const networkIdentity = effectiveNetworkIdentity(fp, options.proxyIdentity, {
-    allowGeoConflict: options.allowGeoConflict
-  })
-  const locale = assertSafeLocale(fp.acceptLanguages || fp.language)
-  const args = [
-    `--user-data-dir=${options.userDataDir}`,
-    `--fingerprint=${seed}`,
-    `--fingerprint-platform=${fp.platform}`,
-    `--fingerprint-hardware-concurrency=${hardwareConcurrency}`,
-    `--fingerprint-screen-width=${fp.screenWidth}`,
-    `--fingerprint-screen-height=${fp.screenHeight}`,
-    `--fingerprint-locale=${locale}`,
-    `--fingerprint-timezone=${networkIdentity.timezone}`,
-    `--lang=${networkIdentity.language}`,
-    `--window-size=${profile.window.mode === 'custom' ? profile.window.width : fp.screenWidth},${profile.window.mode === 'custom' ? profile.window.height : fp.screenHeight}`,
+  const hostMode = hardware?.hostMatched === true
+  const args = [`--user-data-dir=${options.userDataDir}`]
+
+  if (hostMode) {
+    // Apostate host mode composes nothing. Do not send per-field overrides.
+    args.push('--fingerprint=host')
+  } else {
+    const hardwareConcurrency = options.hostHardwareConcurrency
+      ? Math.min(fp.hardwareConcurrency, options.hostHardwareConcurrency)
+      : fp.hardwareConcurrency
+    const networkIdentity = effectiveNetworkIdentity(fp, options.proxyIdentity, {
+      allowGeoConflict: options.allowGeoConflict
+    })
+    const locale = assertSafeLocale(networkIdentity.acceptLanguages || fp.acceptLanguages || networkIdentity.language || fp.language)
+    args.push(
+      `--fingerprint=${effectiveFingerprintSeed(fp)}`,
+      `--fingerprint-platform=${fp.platform}`,
+      `--fingerprint-hardware-concurrency=${hardwareConcurrency}`,
+      `--fingerprint-screen-width=${fp.screenWidth}`,
+      `--fingerprint-screen-height=${fp.screenHeight}`,
+      `--fingerprint-locale=${locale}`,
+      `--fingerprint-timezone=${networkIdentity.timezone}`,
+      `--lang=${networkIdentity.language}`
+    )
+
+    const configuredMemory = fp.deviceMemoryGb ?? hardware?.physicalMemoryGb
+    if (configuredMemory !== undefined) {
+      const memoryGb = options.hostMemoryGb && options.hostMemoryGb > 0
+        ? Math.min(configuredMemory, options.hostMemoryGb)
+        : configuredMemory
+      args.push(`--fingerprint-device-memory=${memoryGb}`)
+    }
+
+    const anchor = apostateAnchorForHardwareProfile(hardware, fp.gpuAnchor)
+    if (anchor) args.push(`--fingerprint-anchor=${anchor}`)
+    if (fp.gpuRenderer?.trim()) args.push(`--fingerprint-gpu-renderer=${fp.gpuRenderer.trim()}`)
+    if (fp.canvasWebglNoise) args.push('--fingerprint-noise')
+  }
+
+  const windowWidth = profile.window.mode === 'custom'
+    ? profile.window.width
+    : hostMode ? profile.window.width : fp.screenWidth
+  const windowHeight = profile.window.mode === 'custom'
+    ? profile.window.height
+    : hostMode ? profile.window.height : fp.screenHeight
+  args.push(
+    `--window-size=${windowWidth},${windowHeight}`,
     `--window-name=${profileWindowName(profile)}`,
     `--abc-profile-serial=${profile.serialNumber}`,
     `--abc-profile-id=${profile.id}`,
@@ -64,12 +98,8 @@ export function buildApostateLaunchArgs(profile: BrowserProfile, options: Aposta
     '--disable-background-mode',
     '--disable-background-networking',
     '--disable-component-update'
-  ]
-
-  const anchor = apostateAnchorForHardwareProfile(hardware)
-  if (anchor) args.push(`--fingerprint-anchor=${anchor}`)
+  )
   if (profile.window.mode === 'custom') args.push(`--window-position=${profile.window.x},${profile.window.y}`)
-
   if (fp.webrtcPolicy === 'proxy_only') args.push('--fingerprint-webrtc-udp=block')
   if (options.proxyUrl) {
     args.push('--disable-quic', '--dns-prefetch-disable', '--no-pings')

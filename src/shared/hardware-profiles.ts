@@ -1,4 +1,4 @@
-import type { BrowserPlatform, FingerprintConfig, HardwareProfileId } from './types'
+import type { ApostateGpuAnchor, BrowserPlatform, FingerprintConfig, HardwareProfileId } from './types'
 import windowsGpuCatalog from './windows-gpu-catalog.json'
 
 export interface GpuIdentity {
@@ -232,6 +232,14 @@ export const HARDWARE_PROFILES: readonly HardwareProfile[] = [
   }
 ]
 
+export function defaultApostateGpuAnchor(profile: HardwareProfile | undefined): ApostateGpuAnchor {
+  if (!profile || profile.hostMatched) return 'auto'
+  if (profile.platform === 'macos') return 'macos-metal-apple-850a91233555'
+  if (/nvidia|rtx/i.test(profile.gpuModel)) return 'windows-d3d11-nvidia-0947761dfbe9'
+  if (/intel/i.test(profile.gpuModel)) return 'windows-d3d11-intel-79dfeb5b4f99'
+  return 'auto'
+}
+
 export function hardwareProfile(id: HardwareProfileId): HardwareProfile | undefined {
   return HARDWARE_PROFILES.find((profile) => profile.id === id)
 }
@@ -276,6 +284,14 @@ export function applyHardwareProfile(
     renderIdentityVersion: gpuBucket === undefined
       ? undefined
       : 4,
+    deviceMemoryGb: profile.hostMatched ? undefined : profile.physicalMemoryGb,
+    gpuAnchor: profile.hostMatched
+      ? 'auto'
+      : options.refreshSeededGpu || config.gpuAnchor === undefined
+        ? defaultApostateGpuAnchor(profile)
+        : config.gpuAnchor,
+    gpuRenderer: options.refreshSeededGpu ? undefined : config.gpuRenderer,
+    canvasWebglNoise: profile.hostMatched ? false : (config.canvasWebglNoise ?? false),
     platform: profile.platform,
     platformVersion: profile.platformVersion,
     hardwareConcurrency: profile.hardwareConcurrency,

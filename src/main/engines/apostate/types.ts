@@ -8,6 +8,7 @@ export interface ApostateLaunchOptions {
   engineVersion?: string
   fingerprintKernel?: boolean
   hostHardwareConcurrency?: number
+  hostMemoryGb?: number
   hostPlatformVersion?: string
   proxyIdentity?: ProxyCheckSummary
   allowGeoConflict?: boolean

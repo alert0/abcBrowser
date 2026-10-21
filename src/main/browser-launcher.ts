@@ -1,7 +1,8 @@
-import { spawn, type ChildProcess } from 'node:child_process'
-import { access, mkdir, readFile, rename, rm, statfs, writeFile } from 'node:fs/promises'
+import { execFile, spawn, type ChildProcess } from 'node:child_process'
+import { access, mkdir, mkdtemp, readFile, rename, rm, statfs, writeFile } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import type { BrowserCrashRecord, BrowserProfile, LaunchDiagnosticCheck, LaunchDiagnosticReport, ProfileLaunchOptions, ProxyConfig, ProxyTestResult } from '../shared/types'
 import { locateBrowserForProfile } from './browser-locator'
 import { buildLaunchArgs } from './launch-args'
@@ -21,6 +22,7 @@ import { sameProxyIdentity } from './profile-secrets'
 import { BrowserControlSession, PipeCdpTransport } from './browser-control-session'
 import type { Readable, Writable } from 'node:stream'
 import { kernelRequiresPro } from '../shared/kernel-policy'
+import { APOSTATE_CHROMIUM_VERSION } from './engines/apostate/capabilities'
 
 type ProxyTester = (config: ProxyConfig) => Promise<ProxyTestResult>
 
@@ -53,6 +55,24 @@ export interface LauncherRuntimeSnapshot {
 export type { BrowserCrashRecord } from '../shared/types'
 
 const MAX_PROFILE_CRASH_RECORDS = 20
+
+function executeForOutput(executable: string, args: string[], timeoutMs: number): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    execFile(executable, args, {
+      encoding: 'utf8',
+      timeout: timeoutMs,
+      maxBuffer: 2 * 1024 * 1024,
+      windowsHide: true
+    }, (error, stdout, stderr) => {
+      if (error) {
+        const output = [String(stdout ?? ''), String(stderr ?? '')].filter(Boolean).join('\n').trim()
+        reject(new Error(output || error.message))
+        return
+      }
+      resolve({ stdout: String(stdout ?? ''), stderr: String(stderr ?? '') })
+    })
+  })
+}
 const MAX_CLOSE_ALL_ROUNDS = 4
 const MAX_STAGNANT_CLOSE_ALL_ROUNDS = 2
 
@@ -214,6 +234,7 @@ export class BrowserLauncher {
         engineVersion: engine.version,
         fingerprintKernel: engine.fingerprintKernel,
         hostHardwareConcurrency: hostHardware.hardwareConcurrency,
+        hostMemoryGb: hostHardware.physicalMemoryGb,
         hostPlatformVersion: hostHardware.platformVersion,
         proxyIdentity: profile.proxyCheck,
         allowGeoConflict: options.allowGeoConflict === true
@@ -580,6 +601,41 @@ export class BrowserLauncher {
     ] as const)))
   }
 
+  async explainFingerprint(id: string): Promise<string> {
+    const profile = this.profiles.get(id)
+    const engine = await locateBrowserForProfile(this.settings, this.profiles.vaultPath, profile.kernelVersion)
+    if (!engine.executable) throw new Error(engine.label)
+    if (!engine.fingerprintKernel || engine.version !== APOSTATE_CHROMIUM_VERSION) {
+      throw new Error('当前内核版本无法确认是 Apostate 155.0.8059.31，不能生成 Apostate 原生组合报告')
+    }
+
+    const hostHardware = hostHardwareSnapshot()
+    const temporaryUserDataDir = await mkdtemp(join(tmpdir(), 'abc-apostate-explain-'))
+    try {
+      const diagnosticProfile = { ...profile, startUrls: [] }
+      const args = buildLaunchArgs(diagnosticProfile, {
+        userDataDir: temporaryUserDataDir,
+        hostHardwareConcurrency: hostHardware.hardwareConcurrency,
+        hostMemoryGb: hostHardware.physicalMemoryGb,
+        hostPlatformVersion: hostHardware.platformVersion,
+        proxyIdentity: profile.proxyCheck,
+        allowGeoConflict: true
+      })
+      args.push('--fingerprint-explain')
+      const { stdout, stderr } = await executeForOutput(engine.executable, args, 15_000)
+      const output = stdout.trim() || stderr.trim()
+      if (!output.includes('apostate fingerprint composition')) {
+        throw new Error(output || '当前 Apostate 内核没有返回指纹组合报告')
+      }
+      return output
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      throw new Error('Apostate 指纹解释失败：' + safeErrorText(message))
+    } finally {
+      await rm(temporaryUserDataDir, { recursive: true, force: true }).catch(() => undefined)
+    }
+  }
+
   async diagnose(id: string): Promise<LaunchDiagnosticReport> {
     const profile = this.profiles.get(id)
     const checks: LaunchDiagnosticCheck[] = []
@@ -675,9 +731,9 @@ export class BrowserLauncher {
       if (profile.fingerprint.networkIdentityMode === 'proxy') {
         const geoReady = Boolean(profile.proxyCheck.countryCode && profile.proxyCheck.timezone
           && profile.proxyCheck.latitude !== undefined && profile.proxyCheck.longitude !== undefined)
-        add('geolocation', '地理身份', geoReady ? (geoConflict ? 'warning' : 'pass') : 'error', geoReady
-          ? `${profile.proxyCheck.countryCode} · ${profile.proxyCheck.timezone} · 浏览器位置使用代理城市级坐标`
-          : profile.proxyCheck.geoConflict ?? '自动网络身份缺少国家、时区或坐标，请重新检测代理')
+        add('geolocation', '地理身份', 'warning', geoReady
+          ? `${profile.proxyCheck.countryCode} · ${profile.proxyCheck.timezone} · 已获取代理城市级坐标；当前版本不会把坐标注入浏览器 Geolocation API`
+          : `${profile.proxyCheck.geoConflict ?? '代理检测缺少国家、时区或坐标'}；当前版本尚未实现 Geolocation API 模拟`)
       }
     }
     if (profile.proxy.protocol !== 'direct' && profile.fingerprint.webrtcPolicy !== 'proxy_only') {
@@ -700,8 +756,10 @@ export class BrowserLauncher {
     } else {
       add('hardware', '硬件一致性', 'pass', `${hardware.label} · ${hardwareProfileSummary(hardware.id)}`)
       add('rendering', '渲染策略', 'pass', hardware.hostMatched
-        ? 'GPU、字体、Canvas、Audio、ClientRects 使用本机原生结果'
-        : `GPU 固定为 ${hardware.gpuModel}；Canvas、Audio、ClientRects 使用稳定原生结果`)
+        ? 'Apostate 主机模式使用本机原生身份，不组合 persona'
+        : profile.fingerprint.gpuAnchor && profile.fingerprint.gpuAnchor !== 'auto'
+          ? `GPU 家族固定为 ${profile.fingerprint.gpuAnchor}；Canvas/WebGL 读取噪声 ${profile.fingerprint.canvasWebglNoise ? '已开启' : '关闭'}`
+          : `GPU 家族由 Apostate 种子选择；Canvas/WebGL 读取噪声 ${profile.fingerprint.canvasWebglNoise ? '已开启' : '关闭'}`)
     }
 
     return {

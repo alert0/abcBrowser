@@ -1,10 +1,11 @@
-import { availableParallelism, release } from 'node:os'
+import { availableParallelism, release, totalmem } from 'node:os'
 import type { BrowserPlatform } from '../shared/types'
 
 export interface HostHardwareSnapshot {
   platform: BrowserPlatform
   platformVersion: string
   hardwareConcurrency: number
+  physicalMemoryGb: number
 }
 
 export function hostPlatformVersion(platform: BrowserPlatform, operatingSystemRelease: string): string {
@@ -20,6 +21,7 @@ export function hostHardwareSnapshot(): HostHardwareSnapshot {
   return {
     platform,
     platformVersion: hostPlatformVersion(platform, release()),
-    hardwareConcurrency: Math.max(2, Math.min(64, availableParallelism()))
+    hardwareConcurrency: Math.max(2, Math.min(64, availableParallelism())),
+    physicalMemoryGb: Math.max(1, Math.floor(totalmem() / (1024 ** 3)))
   }
 }

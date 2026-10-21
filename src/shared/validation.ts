@@ -1,5 +1,5 @@
-import { applyHardwareProfile, HARDWARE_PROFILES } from './hardware-profiles'
-import type { HardwareProfileId, ProfileDraft, ProxyConfig } from './types'
+import { applyHardwareProfile, defaultApostateGpuAnchor, HARDWARE_PROFILES } from './hardware-profiles'
+import type { ApostateGpuAnchor, HardwareProfileId, ProfileDraft, ProxyConfig } from './types'
 import { domainToASCII } from 'node:url'
 import { isIP } from 'node:net'
 
@@ -63,6 +63,39 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft {
   const allowedHardwareProfiles = new Set<HardwareProfileId>(['legacy-custom', ...HARDWARE_PROFILES.map((profile) => profile.id)])
   if (!allowedHardwareProfiles.has(hardwareProfileId)) throw new Error('硬件模板无效')
   const fp = applyHardwareProfile({ ...rawFp, hardwareProfileId }, hardwareProfileId)
+  const selectedHardware = HARDWARE_PROFILES.find((profile) => profile.id === hardwareProfileId)
+  const deviceMemoryGb = selectedHardware?.hostMatched
+    ? undefined
+    : (fp.deviceMemoryGb ?? selectedHardware?.physicalMemoryGb ?? 8)
+  if (deviceMemoryGb !== undefined && (!Number.isInteger(deviceMemoryGb) || deviceMemoryGb < 1 || deviceMemoryGb > 4096)) {
+    throw new Error('设备内存必须是 1–4096 GiB 的整数')
+  }
+  const gpuAnchor = selectedHardware?.hostMatched
+    ? 'auto'
+    : (fp.gpuAnchor ?? defaultApostateGpuAnchor(selectedHardware))
+  const allowedGpuAnchors = new Set<ApostateGpuAnchor>([
+    'auto',
+    'windows-d3d11-intel-79dfeb5b4f99',
+    'windows-d3d11-nvidia-0947761dfbe9',
+    'windows-d3d11-qualcomm-6388f9914f3f',
+    'macos-metal-apple-850a91233555'
+  ])
+  if (!allowedGpuAnchors.has(gpuAnchor)) throw new Error('Apostate GPU 家族配置无效')
+  const expectedAnchorPrefix = fp.platform === 'windows' ? 'windows-' : 'macos-'
+  if (gpuAnchor !== 'auto' && !gpuAnchor.startsWith(expectedAnchorPrefix)) {
+    throw new Error('Apostate GPU 家族必须与所选平台一致')
+  }
+  const gpuRenderer = typeof fp.gpuRenderer === 'string' ? fp.gpuRenderer.trim() : ''
+  if (gpuRenderer.length > 512 || /[\u0000-\u001f\u007f]/.test(gpuRenderer)) {
+    throw new Error('Apostate GPU renderer 配置无效或过长')
+  }
+  if (gpuRenderer && gpuAnchor === 'auto') {
+    throw new Error('指定 GPU renderer 前，请先固定 GPU 家族')
+  }
+  if (fp.canvasWebglNoise !== undefined && typeof fp.canvasWebglNoise !== 'boolean') {
+    throw new Error('Canvas/WebGL 读取噪声配置无效')
+  }
+  const canvasWebglNoise = selectedHardware?.hostMatched ? false : (fp.canvasWebglNoise ?? false)
   if (!['windows', 'macos'].includes(fp.platform) || !['Chrome', 'Edge'].includes(fp.brand)) {
     throw new Error('指纹平台或浏览器品牌无效')
   }
@@ -75,7 +108,7 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft {
   if (fp.gpuBucket !== undefined && (
     !Number.isInteger(fp.gpuBucket)
     || fp.gpuBucket < 0
-    || fp.gpuBucket >= (HARDWARE_PROFILES.find((profile) => profile.id === fp.hardwareProfileId)?.gpuBucketCount ?? 0)
+    || fp.gpuBucket >= (selectedHardware?.gpuBucketCount ?? 0)
   )) {
     throw new Error('GPU 身份 bucket 无效')
   }
@@ -144,6 +177,10 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft {
       hardwareProfileId: fp.hardwareProfileId,
       gpuBucket: fp.gpuBucket,
       renderIdentityVersion: fp.renderIdentityVersion,
+      deviceMemoryGb,
+      gpuAnchor,
+      gpuRenderer: gpuRenderer || undefined,
+      canvasWebglNoise,
       platform: fp.platform,
       language: fp.language.trim(),
       acceptLanguages: fp.acceptLanguages.trim(),

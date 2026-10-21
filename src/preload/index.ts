@@ -38,6 +38,7 @@ const api: BrowserApi = {
     closeAll: () => ipcRenderer.invoke('profiles:close-all'),
     testProxy: (id: string) => ipcRenderer.invoke('profiles:test-proxy', id),
     diagnose: (id: string) => ipcRenderer.invoke('profiles:diagnose', id),
+    explainFingerprint: (id: string) => ipcRenderer.invoke('profiles:explain-fingerprint', id),
     crashHistory: (id: string) => ipcRenderer.invoke('profiles:crash-history', id),
     setFavorite: (id: string, favorite: boolean) => ipcRenderer.invoke('profiles:set-favorite', id, favorite),
     classifyMany: (ids: string[], patch: ProfileBatchClassification) => ipcRenderer.invoke('profiles:classify-many', ids, patch),

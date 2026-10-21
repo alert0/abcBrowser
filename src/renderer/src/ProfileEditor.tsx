@@ -14,6 +14,7 @@ import {
   Row,
   Select,
   Space,
+  Switch,
   Tag,
   Tabs,
   Typography
@@ -22,6 +23,7 @@ import { useEffect, useState } from 'react'
 import { defaultPlatform, defaultProfileDraft, randomSeed } from '../../shared/defaults'
 import {
   applyHardwareProfile,
+  defaultApostateGpuAnchor,
   effectiveGpuIdentity,
   HARDWARE_PROFILES,
   hardwareProfile,
@@ -29,7 +31,7 @@ import {
   refreshSeededGpuIdentity
 } from '../../shared/hardware-profiles'
 import { effectiveNetworkIdentity } from '../../shared/network-identity'
-import type { BrowserExtension, BrowserProfileView, EngineStatus, HardwareProfileId, KernelRelease, ProfileDraft, ProxyTestResult } from '../../shared/types'
+import type { ApostateGpuAnchor, BrowserExtension, BrowserProfileView, EngineStatus, HardwareProfileId, KernelRelease, ProfileDraft, ProxyTestResult } from '../../shared/types'
 import { kernelRequiresPro } from '../../shared/kernel-policy'
 
 interface EditorValues extends Omit<ProfileDraft, 'startUrls' | 'color'> {
@@ -54,6 +56,7 @@ interface ProfileEditorProps {
 function editorValues(profile: BrowserProfileView | undefined, index: number): EditorValues {
   const draft = profile ?? defaultProfileDraft(index)
   const fingerprint = { ...draft.fingerprint }
+  const selectedHardware = hardwareProfile(fingerprint.hardwareProfileId)
   return {
     name: draft.name,
     note: draft.note,
@@ -67,6 +70,10 @@ function editorValues(profile: BrowserProfileView | undefined, index: number): E
     proxy: { ...draft.proxy },
     fingerprint: {
       ...fingerprint,
+      deviceMemoryGb: selectedHardware?.hostMatched ? undefined : (fingerprint.deviceMemoryGb ?? selectedHardware?.physicalMemoryGb ?? 8),
+      gpuAnchor: selectedHardware?.hostMatched ? 'auto' : (fingerprint.gpuAnchor ?? defaultApostateGpuAnchor(selectedHardware)),
+      gpuRenderer: fingerprint.gpuRenderer ?? undefined,
+      canvasWebglNoise: selectedHardware?.hostMatched ? false : (fingerprint.canvasWebglNoise ?? false),
       disabledSpoofing: [...draft.fingerprint.disabledSpoofing]
     }
   }
@@ -91,6 +98,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const fingerprintAcceptLanguages = Form.useWatch(['fingerprint', 'acceptLanguages'], form) ?? 'zh-CN,zh,en-US,en'
   const networkIdentityMode = Form.useWatch(['fingerprint', 'networkIdentityMode'], form) ?? 'manual'
   const hardwareProfileId = Form.useWatch(['fingerprint', 'hardwareProfileId'], form) ?? 'legacy-custom'
+  const fingerprintPlatform = Form.useWatch(['fingerprint', 'platform'], form) ?? defaultPlatform()
+  const fingerprintGpuAnchor = Form.useWatch(['fingerprint', 'gpuAnchor'], form) ?? 'auto'
   const fingerprintSeed = Form.useWatch(['fingerprint', 'seed'], form) ?? 0
   const fingerprintGpuBucket = Form.useWatch(['fingerprint', 'gpuBucket'], form)
   const kernelVersion = Form.useWatch('kernelVersion', form) ?? ''
@@ -99,6 +108,17 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const [proxyResult, setProxyResult] = useState<ProxyTestResult | null>(null)
   const pinnedKernel = kernels.find((kernel) => kernel.version === kernelVersion)
   const selectedHardware = hardwareProfile(hardwareProfileId)
+  const gpuAnchorOptions: Array<{ value: ApostateGpuAnchor; label: string }> = fingerprintPlatform === 'windows'
+    ? [
+      { value: 'auto', label: '自动选择（由种子和宿主架构决定）' },
+      { value: 'windows-d3d11-intel-79dfeb5b4f99', label: 'Windows · Intel · Direct3D 11' },
+      { value: 'windows-d3d11-nvidia-0947761dfbe9', label: 'Windows · NVIDIA · Direct3D 11' },
+      { value: 'windows-d3d11-qualcomm-6388f9914f3f', label: 'Windows · Qualcomm · Direct3D 11' }
+    ]
+    : [
+      { value: 'auto', label: '自动选择（由种子决定）' },
+      { value: 'macos-metal-apple-850a91233555', label: 'macOS · Apple · Metal' }
+    ]
   const selectedGpuIdentity = effectiveGpuIdentity({
     hardwareProfileId,
     seed: fingerprintSeed,
@@ -449,8 +469,26 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         type="info"
         showIcon
         message="Apostate 使用 GPU 家族映射"
-        description="Prism 的数字 GPU bucket、渲染身份版本和旧版 selective spoofing 参数不会透传到内核。"
+        description="Prism 的数字 GPU bucket、渲染身份版本和旧版 selective spoofing 参数不会透传到内核。精确 renderer 必须属于所选家族。"
       />
+      <Form.Item
+        name={['fingerprint', 'gpuAnchor']}
+        label="Apostate GPU 家族"
+        extra="auto 表示由种子选择；固定家族后可选填精确 WebGL renderer。"
+      >
+        <Select
+          disabled={selectedHardware?.hostMatched}
+          options={gpuAnchorOptions}
+          onChange={() => form.setFieldValue(['fingerprint', 'gpuRenderer'], undefined)}
+        />
+      </Form.Item>
+      <Form.Item
+        name={['fingerprint', 'gpuRenderer']}
+        label="WebGL GPU Renderer（可选）"
+        extra="必须使用 Apostate GPU catalogue 中与所选家族一致的完整 renderer 字符串；不匹配时内核会拒绝启动。"
+      >
+        <Input disabled={selectedHardware?.hostMatched || fingerprintGpuAnchor === 'auto'} placeholder="ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 …)" />
+      </Form.Item>
       {selectedHardware?.renderIdentityMode === 'seeded-curated' && !selectedGpuIdentity && (
         <Alert
           type="warning"
@@ -471,11 +509,12 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       <Row gutter={12}>
         <Col span={16}>
           <Form.Item name={['fingerprint', 'seed']} label={t("指纹种子")} rules={[{ required: true }]}>
-            <InputNumber min={0} max={0xffffffff} precision={0} className="full-width" />
+            <InputNumber disabled={selectedHardware?.hostMatched} min={0} max={0xffffffff} precision={0} className="full-width" />
           </Form.Item>
         </Col>
         <Col span={8} className="seed-action">
           <Button
+            disabled={selectedHardware?.hostMatched}
             icon={<ReloadOutlined />}
             onClick={() => {
               const current = form.getFieldValue('fingerprint')
@@ -492,6 +531,25 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           ? t("不同环境可能共享当前设备的硬件信息。")
           : t("指纹种子决定环境身份。使用中的环境请勿随意修改；复制或重新生成会获得新身份。")}
       </div>
+      {selectedHardware?.hostMatched ? (
+        <Alert type="info" showIcon message="设备内存：本机自动" description="主机模式不应用合成内存值，保留真实主机身份。" />
+      ) : (
+        <Form.Item
+          name={['fingerprint', 'deviceMemoryGb']}
+          label="设备内存（GiB）"
+          extra="Apostate 的 --fingerprint-device-memory；超过宿主物理内存的值会在启动前保守限制。硬件模板会固定该值。"
+        >
+          <InputNumber min={1} max={4096} precision={0} disabled={hardwareProfileId !== 'legacy-custom'} className="full-width" />
+        </Form.Item>
+      )}
+      <Form.Item
+        name={['fingerprint', 'canvasWebglNoise']}
+        valuePropName="checked"
+        label="Canvas / WebGL 读取噪声"
+        extra="Apostate 特有的可选像素读取噪声，默认关闭；可能被专门测试检测到，主机模式下无效。"
+      >
+        <Switch disabled={selectedHardware?.hostMatched} />
+      </Form.Item>
       <Divider />
       <Alert
         type="warning"
@@ -504,9 +562,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           <Form.Item
             name={['fingerprint', 'networkIdentityMode']}
             label={t("网络身份")}
-            extra={t("自动模式会在启动前检测代理并匹配语言、时区和位置。")}
+            extra={t("自动模式会在启动前检测代理并匹配语言和时区；当前不模拟浏览器 Geolocation API。")}
           >
-            <Select options={[
+            <Select disabled={selectedHardware?.hostMatched} options={[
               { value: 'proxy', label: t("跟随代理出口（推荐）") },
               { value: 'manual', label: t("手动固定") }
             ]} />
@@ -521,11 +579,11 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           </Form.Item>
         </Col>
       </Row>
-      {networkIdentityMode === 'proxy' && (
+      {networkIdentityMode === 'proxy' && !selectedHardware?.hostMatched && (
         <Alert
           type={proxyProtocol === 'direct' ? 'warning' : 'info'}
           showIcon
-          message={proxyProtocol === 'direct' ? t("当前没有配置代理") : t("语言、时区和地理位置将在启动时跟随代理")}
+          message={proxyProtocol === 'direct' ? t("当前没有配置代理") : t("语言和时区将在启动时跟随代理；浏览器 Geolocation API 仍不模拟")}
           description={proxyProtocol === 'direct'
             ? t("直连环境继续使用下方手动值；配置代理后自动联动。")
             : `${networkIdentity.language} · ${networkIdentity.acceptLanguages} · ${networkIdentity.timezone}`}
@@ -554,23 +612,23 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       <Row gutter={12}>
         <Col span={12}>
           <Form.Item name={['fingerprint', 'language']} label={t("界面语言")}>
-            <Input disabled={networkIdentityMode === 'proxy' && proxyProtocol !== 'direct'} placeholder="zh-CN" />
+            <Input disabled={selectedHardware?.hostMatched || (networkIdentityMode === 'proxy' && proxyProtocol !== 'direct')} placeholder="zh-CN" />
           </Form.Item>
         </Col>
         <Col span={12}>
           <Form.Item name={['fingerprint', 'timezone']} label={t("时区")}>
-            <Input disabled={networkIdentityMode === 'proxy' && proxyProtocol !== 'direct'} placeholder="Asia/Shanghai" />
+            <Input disabled={selectedHardware?.hostMatched || (networkIdentityMode === 'proxy' && proxyProtocol !== 'direct')} placeholder="Asia/Shanghai" />
           </Form.Item>
         </Col>
       </Row>
       <Form.Item name={['fingerprint', 'acceptLanguages']} label="Accept-Language">
-        <Input disabled={networkIdentityMode === 'proxy' && proxyProtocol !== 'direct'} placeholder="zh-CN,zh,en-US,en" />
+        <Input disabled={selectedHardware?.hostMatched || (networkIdentityMode === 'proxy' && proxyProtocol !== 'direct')} placeholder="zh-CN,zh,en-US,en" />
       </Form.Item>
       <Alert
         type="info"
         showIcon
         message="部分旧版指纹开关已隐藏"
-        description="Apostate 当前没有确认的字体、Audio、Canvas、ClientRects 或 GPU selective spoofing 等价参数。"
+        description="Apostate 使用原生 C++ 指纹组合；Canvas/WebGL 只提供可选读取噪声，不提供旧版 Canvas 单项伪装开关。字体、Audio、ClientRects 的旧版单项开关不会透传。"
       />
     </div>
   )

@@ -114,6 +114,37 @@ describe('profile validation', () => {
     expect(() => validateProfileDraft(exitDraft)).toThrow('出口变化')
   })
 
+  it('validates Apostate memory, GPU family, renderer and noise settings', () => {
+    const draft = defaultProfileDraft()
+    draft.fingerprint.hardwareProfileId = 'legacy-custom'
+    draft.fingerprint.platform = 'windows'
+    draft.fingerprint.deviceMemoryGb = 16
+    draft.fingerprint.gpuAnchor = 'windows-d3d11-nvidia-0947761dfbe9'
+    draft.fingerprint.gpuRenderer = 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4060)'
+    draft.fingerprint.canvasWebglNoise = true
+    expect(validateProfileDraft(draft).fingerprint).toMatchObject({
+      deviceMemoryGb: 16,
+      gpuAnchor: 'windows-d3d11-nvidia-0947761dfbe9',
+      gpuRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4060)',
+      canvasWebglNoise: true
+    })
+
+    const badMemory = defaultProfileDraft()
+    badMemory.fingerprint.hardwareProfileId = 'legacy-custom'
+    badMemory.fingerprint.deviceMemoryGb = 0
+    expect(() => validateProfileDraft(badMemory)).toThrow('设备内存')
+
+    const badAnchor = defaultProfileDraft()
+    badAnchor.fingerprint.hardwareProfileId = 'legacy-custom'
+    badAnchor.fingerprint.gpuAnchor = 'invalid-anchor' as unknown as typeof badAnchor.fingerprint.gpuAnchor
+    expect(() => validateProfileDraft(badAnchor)).toThrow('GPU 家族')
+
+    const rendererWithoutAnchor = defaultProfileDraft()
+    rendererWithoutAnchor.fingerprint.hardwareProfileId = 'legacy-custom'
+    rendererWithoutAnchor.fingerprint.gpuRenderer = 'ANGLE renderer'
+    expect(() => validateProfileDraft(rendererWithoutAnchor)).toThrow('固定 GPU 家族')
+  })
+
   it('normalizes duplicate groups and tags', () => {
     const draft = defaultProfileDraft()
     draft.group = '  美国店铺  '

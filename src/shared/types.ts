@@ -1,5 +1,11 @@
 import type { UiLocale } from './i18n'
 export type BrowserPlatform = 'windows' | 'macos'
+export type ApostateGpuAnchor =
+  | 'auto'
+  | 'windows-d3d11-intel-79dfeb5b4f99'
+  | 'windows-d3d11-nvidia-0947761dfbe9'
+  | 'windows-d3d11-qualcomm-6388f9914f3f'
+  | 'macos-metal-apple-850a91233555'
 export type BrowserBrand = 'Chrome' | 'Edge'
 export type HardwareProfileId =
   | 'legacy-custom'
@@ -149,6 +155,14 @@ export interface FingerprintConfig {
   brand: BrowserBrand
   brandVersion: string
   hardwareConcurrency: number
+  /** Apostate installed-memory override in GiB; omitted in host mode. */
+  deviceMemoryGb?: number
+  /** Apostate GPU family anchor; auto delegates family selection to the seed. */
+  gpuAnchor?: ApostateGpuAnchor
+  /** Optional WebGL unmasked renderer, validated by Apostate against the selected family. */
+  gpuRenderer?: string
+  /** Enables Apostate's deterministic Canvas/WebGL readback noise. */
+  canvasWebglNoise?: boolean
   language: string
   acceptLanguages: string
   timezone: string
@@ -457,6 +471,7 @@ export interface BrowserApi {
     closeAll: () => Promise<void>
     testProxy: (id: string) => Promise<BrowserProfileView>
     diagnose: (id: string) => Promise<LaunchDiagnosticReport>
+    explainFingerprint: (id: string) => Promise<string>
     crashHistory: (id: string) => Promise<BrowserCrashRecord[]>
     setFavorite: (id: string, favorite: boolean) => Promise<BrowserProfileView>
     classifyMany: (ids: string[], patch: ProfileBatchClassification) => Promise<BrowserProfileView[]>

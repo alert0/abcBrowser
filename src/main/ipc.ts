@@ -263,6 +263,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     return publicProfile(profile)
   })
   ipcMain.handle('profiles:diagnose', (_event, id: string) => launcher.diagnose(id))
+  ipcMain.handle('profiles:explain-fingerprint', (_event, id: string) => launcher.explainFingerprint(id))
   ipcMain.handle('profiles:crash-history', (_event, id: string) => launcher.crashHistory(id))
   ipcMain.handle('profiles:set-favorite', async (_event, id: string, favorite: boolean) => publicProfile(await profiles.setFavorite(id, favorite)))
   ipcMain.handle('profiles:classify-many', async (_event, ids: string[], patch) => {
