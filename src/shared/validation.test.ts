@@ -56,6 +56,17 @@ describe('profile validation', () => {
     expect(result.fingerprint.seed).toBe(123456)
   })
 
+  it('rejects zero in Seed mode but permits the inactive seed in Host/Custom modes', () => {
+    const draft = defaultProfileDraft()
+    draft.fingerprint.seed = 0
+    expect(() => validateProfileDraft(draft)).toThrow('种子不能为 0')
+    draft.fingerprint.hardwareProfileId = 'windows-host'
+    expect(validateProfileDraft(draft).fingerprint.seed).toBe(0)
+    draft.fingerprint.hardwareProfileId = 'legacy-custom'
+    draft.fingerprint.apostateProfileJson = '{"cpu":{"logical_cores":2}}'
+    expect(validateProfileDraft(draft).fingerprint.seed).toBe(0)
+  })
+
   it('normalizes every hardware field from a coherent preset', () => {
     const draft = defaultProfileDraft()
     draft.fingerprint.hardwareProfileId = 'windows-11-rtx4070'

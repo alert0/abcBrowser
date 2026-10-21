@@ -1,0 +1,1 @@
+apostate: --fingerprint-device-memory names 51539607552 bytes, which is above this host's 42806288384. A page can allocate until it fails, so claiming more memory than the machine has is falsifiable in a way claiming less is not.

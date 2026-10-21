@@ -60,8 +60,9 @@ export interface HardwareProfile {
 }
 
 /**
- * These presets match the GPU ordering in fingerprint patch 011-gpu-info.
- * Keep the bucket values in sync when the kernel GPU catalogue changes.
+ * GPU bucket metadata belongs to the former Prism fingerprint patch.
+ * Apostate uses its own family catalogue: these values must never rewrite its
+ * seed or be presented as evidence of the native GPU model.
  */
 export const HARDWARE_PROFILES: readonly HardwareProfile[] = [
   {
@@ -300,6 +301,7 @@ export function applyHardwareProfile(
   }
 }
 
+/** Legacy Prism bucket utility. Not an Apostate launch seed resolver. */
 export function effectiveFingerprintSeed(config: FingerprintConfig): number {
   const seed = config.seed >>> 0
   const profile = hardwareProfile(config.hardwareProfileId)
@@ -352,5 +354,5 @@ export function hardwareProfileSummary(id: HardwareProfileId): string {
   const profile = hardwareProfile(id)
   if (!profile) return '未知硬件模板'
   if (profile.hostMatched) return `本机 CPU · 本机内存 · 本机 GPU · ${profile.screenWidth}×${profile.screenHeight}`
-  return `${profile.hardwareConcurrency} 核 · ${profile.physicalMemoryGb}GB · ${profile.gpuModel} · ${profile.screenWidth}×${profile.screenHeight}`
+  return `${profile.hardwareConcurrency} 核 · ${profile.physicalMemoryGb}GB · GPU 型号由 Apostate 选择（模板仅参考家族） · ${profile.screenWidth}×${profile.screenHeight}`
 }

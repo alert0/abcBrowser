@@ -1,0 +1,972 @@
+diff --git a/docs/testing/abcBrowser-apostate-acceptance.md b/docs/testing/abcBrowser-apostate-acceptance.md
+new file mode 100644
+index 0000000..b680f62
+--- /dev/null
++++ b/docs/testing/abcBrowser-apostate-acceptance.md
+@@ -0,0 +1,99 @@
++# abcBrowser Apostate 适配层审计与本地真实验收
++
++日期：2026-10-21（Asia/Shanghai）。分支：`feature/apostate-local-kernel`。
++
++## 结论与边界
++
++本次使用用户已经导入的 Windows x64 Apostate `155.0.8059.31`，原地执行有界面浏览器测试。没有下载替代内核，没有修改内核、任何 manifest、编译配置或内核打包流程。用户的浏览器环境和代理配置未被测试脚本覆盖；每个测试使用独立临时目录、仅监听 loopback 的探针与随机 CDP 端口。
++
++完整套件 **208 项单元测试通过、2 项跳过、0 项失败**；类型检查及应用构建通过。真实验收发现 **Custom Profile 省略语言时未继承 Host 语言**；此项保留 FAIL，不能宣称全面验收通过。公共网络 WebRTC 泄漏、代理 UDP/TURN 路径缺少充分证据，保留 UNVERIFIED。只进行适配层、验证及验收工作，未开发其他功能。
++
++Windows 电脑控制实际读到 Prism Browser：内核显示已连接，用户环境显示已关闭。随后通过其已导入二进制运行独立验收；没有将普通 Google Chrome 的结果当作 Apostate 证据。
++
++## 官方语义与本次修复
++
++依据固定版本 [switches](https://github.com/heretic-tech/apostate/blob/v0.5.1/docs/reference/switches.mdx)、[profile schema](https://github.com/heretic-tech/apostate/blob/v0.5.1/config/profile.schema.json) 与实际输出：
++
++| 问题 | abcBrowser 处理 |
++| --- | --- |
++| 旧 Prism GPU bucket 算法改写 Seed | Apostate 启动使用原始 Seed，不再套用旧 bucket 模数；明确旧 metadata 不证明内核 GPU 型号 |
++| Seed=0 被内核解释为 Host | Seed 模式保存和启动均拒绝 0；Host/Custom 中不使用该 Seed |
++| Host/Custom 静默忽略 `public_only` | 三种模式一致拒绝；`proxy_only` 在三种模式均明确映射 `block`，`default` 不附加策略参数 |
++| 小数宿主 GiB 会生成内核不接受的小数参数 | Seed 内存按宿主整 GiB 保守限制；Custom 按物理字节限制；未传宿主选项也读取真实资源 |
++| 宿主快照强制最少 2 核、最多 64 核 | 移除虚构下限/截断，保留实际 CPU 与内存精度 |
++| UI language 与语言列表首项矛盾 | 启动时拒绝；不再依赖对 persona 无效的 `--lang`；拒绝无效语言列表、时区、数值、GPU 家族/renderer 组合 |
++| 窗口大于声称屏幕 | 在启动前明确拒绝；Custom 仅对其显式屏幕维度检查 |
++| JSON schema property lookup 读取原型属性 | 只允许 schema 自有属性；`constructor` / `__proto__` / `toString` 不再绕过 unknown-key 检查 |
++| 空对象或仅 provenance 不能可靠代表设备 | abcBrowser 明确拒绝这类 Custom 配置；这是应用层比官方 schema 更严格的约束 |
++| Explain 能力声明过宽 | 明确 Custom 不能依赖 Explain 输出/退出，使用 API；提示实测语言继承例外 |
++| 旧验收错误期待原始超宿主参数 clamp、Custom+Seed 拒绝 | 修正为内核拒绝超限逐字段参数；Custom 原生优先，保存完整参数与 stderr；不再以 Custom Explain 超时当作模式冲突证明 |
++| 噪声探针只绘制纯色 | 使用边缘/文字或三角形，避免纯色未改变就误报噪声失败 |
++
++**兼容性影响：** 过去已使用旧 bucket 改写的环境，改用原始 Seed 后身份可能改变。本次没有批量迁移或修改用户保存的 Seed。旧 `effectiveFingerprintSeed` 仅保留作遗留工具，Apostate 不再调用；硬件模板名称不等于真实 GPU 型号，精确型号须指定合法 renderer 并实测。
++
++## 模式互斥与优先级矩阵
++
++Custom JSON 非空且有效时是明确的模式选择（编辑器显示提示），优先于硬件模板；否则 hostMatched 模板选择 Host，其余选择 Seed。非活动模式的字段不编码进启动参数。这与内核设备 Profile 优先语义一致；不向内核发送含糊的组合让其静默决定。
++
++| 输入组合 | 应用输出/结果 | 覆盖 |
++| --- | --- | --- |
++| Seed + 合法逐字段配置 | 一个 `--fingerprint=原始种子`，平台/CPU/内存/屏幕/locale/timezone/GPU 明确映射 | 单测及真实 API |
++| Host + 遗留 Seed/逐字段值/noise | 仅 `--fingerprint=host`，不附加这些指纹覆盖 | 单测及 Host Explain/API |
++| Custom + Seed/逐字段值/noise | 仅 `--apostate-profile=base64(UTF-8 JSON)`；遗漏字段不从 Seed 补齐 | 单测及真实 API |
++| Custom + Host 模板 + Seed=0 | 明确选择 Custom，仅发送 Profile | 单测 |
++| 三种模式 × `default` / `proxy_only` | 6 组均验证模式参数唯一；仅后者发送 `--fingerprint-webrtc-udp=block` | 单测 |
++| 三种模式 × `public_only` | 拒绝；不能静默忽略 | 单测 |
++| Seed=0、无效资源数值、renderer 无固定家族、冲突 locale、超大窗口 | 启动前拒绝 | 单测 |
++| 原生 Host + 逐字段覆盖 | 原生 exit 1，与应用主动排除冲突一致 | 原始 stderr |
++| 原生 Custom + Seed/Host + 冲突字段 | Profile 胜出，完整 stderr 已保存；本地二进制未观察到官方文档所述的忽略警告，应用正常启动不生成该组合 | 原生 API 对照 |
++| 请求资源低于/等于/高于宿主 | 应用上限检查；原始超宿主 CPU/内存参数 exit 1 | 单测及真实 API/拒绝日志 |
++
++官方 schema 文件本次未改动。单测还覆盖嵌套类型、未知属性、const、exclusiveMinimum、contains、12 KiB 长度限制、UTF-8 base64 与未显式字段不被补值。
++
++## 环境和证据
++
++Windows `10.0.26300` x64，AMD Ryzen 7 5800，16 逻辑处理器，物理内存 `42,806,288,384` bytes（约 39.866 GiB）。Host API：16 核、deviceMemory=32、1680×1050、zh-CN / zh、Asia/Shanghai，WebGL AMD Radeon R7 200 Series。
++
++本地内核 `chrome.exe` SHA-256：`9943a6252e1f540e879805209d844a4110fa7edc476dc50091fdf27740f609d1`。其来源是用户此前导入的 `local-build`；不能据此宣称等同 GitHub 官方 ZIP 或证明上游来源。Explain 实际返回 Chromium `155.0.8059.31`、schema 3、catalogue v2。
++
++- [首次探针诊断](evidence/apostate-local-20261021/evidence.json)：初始 CDP context 在首次导航提交时销毁，API 项为 BLOCKED，属于测试等待逻辑问题；已修复为等待探针 document ready。
++- [首次完成的有界面实测](evidence/apostate-local-20261021-ready/evidence.json)：保留真实语言继承失败，未覆写。
++- [最终扩展复测](evidence/apostate-local-20261021-final/evidence.json)：64 PASS、2 FAIL（同一语言继承问题的两个 API）、2 UNVERIFIED、0 BLOCKED。各 case 保存 `.arguments.json`、原始 `.stdout.txt` / `.stderr.txt`、结构化 `.json` 与 `.png` 截图。`requested` 与 `effectiveArguments` 可逐项比对，资源 clamp 的输入与实际 API 值均保留。完整应用代码差异见同目录 `abcBrowser.patch`。
++- 单元测试 JSON 见 `evidence/apostate-local-20261021-ready/unit-tests-final.json`；测试前新增用例复现 11 项失败，修复后再运行完整套件。
++
++## 实际结果
++
++| 检查 | 状态 | 直接证据/限制 |
++| --- | --- | --- |
++| Host / Seed Explain | PASS | 原始 composition disabled、seed 42、CPU/memory/screen/locale/timezone 命令行覆盖行与 limitations |
++| Host CPU/内存/GPU/屏幕/语言/时区读回 | PASS | Host API JSON，CPU 与宿主快照一致；纯 Host 不包含 Seed/逐字段覆盖 |
++| Seed CPU=2、memory=2、1280×900、en-GB/en、Europe/London | PASS | 页面 API、实际 Accept-Language 请求头及截图 |
++| Custom 显式同组配置 | PASS | 页面 API、实际请求头及截图 |
++| CPU 及 Custom 内存宿主上限 | PASS | 超宿主请求生成安全参数；页面 CPU=16、Custom memory bucket=32 与 Host 一致 |
++| GPU 家族与精确 renderer | PASS | Intel UHD Graphics 630 完整 renderer 由 WebGL 实际返回；未把参数出现当成已生效 |
++| Canvas 绘制与可选噪声 | PASS | 正常 PNG 读取；相同输入/Seed 开启噪声后边缘图像 hash 改变 |
++| 重复 Seed | PASS | CPU、内存、屏幕、locale、timezone、WebGL、Canvas hash 重复一致 |
++| 改变 Seed | PASS | 本机 42/43 WebGL 身份有变化；不要求所有显式固定值改变 |
++| Partial Custom 继承 CPU 以外的内存/平台/UA/屏幕/时区/WebGL/Canvas | PASS | 与 Host API 基线逐项比较 |
++| Partial Custom 继承 language/languages | **FAIL** | Host 为 zh-CN / [zh-CN,zh]；只写 CPU 的 Custom 返回 en-US / [en-US,en]；是此现有二进制可复现行为，保留证据，不改内核 |
++| WebRTC loopback STUN 对照 | UNVERIFIED | `default` 对照与 `block` 均收到 0 个 STUN 请求；不能据此证明 block 工作 |
++| 公网 WebRTC 无泄漏、代理 UDP/TURN | UNVERIFIED | 缺少受控外部服务/网络路径，未向公共检测网站传指纹或 STUN 数据 |
++| 全部模式与公网一致性最终验收 | **未通过** | 上述 FAIL/UNVERIFIED 未解决；不能标记全绿 |
++
++## 本地复现与 CI
++
++依赖已就绪时执行（直接用已存在、可运行的二进制）：
++
++```powershell
++npm run typecheck
++npx --no-install vitest run --fileParallelism=false --pool=threads --maxWorkers=1
++node tools/apostate-runtime-acceptance/local.mjs --executable "C:\path\to\existing\chrome.exe" --output "docs/testing/evidence/local-run"
++```
++
++默认有界面，`--headless` 仅为额外对照。退出码非零代表存在 FAIL 或 BLOCKED；UNVERIFIED 必须逐项人工读报告，不能等价通过。脚本只清理其自行启动的 PID 树，保留独立临时 profile 便于诊断；不结束用户现有浏览器。
++
++本机完整套件需要 `ELECTRON_OVERRIDE_DIST_PATH` 指向已存在的 Electron 运行时，否则当前不完整的新 Electron 依赖会尝试在线下载并卡住。此次使用原先运行 Prism 的 Electron dist，不修改 Apostate。
++
++既有 [Windows build workflow](https://github.com/alert0/abcBrowser/actions/workflows/windows.yml) 与 [官方 ZIP runtime workflow](https://github.com/alert0/abcBrowser/actions/workflows/apostate-runtime-acceptance.yml) 分开判断。旧 CI 报告见 [历史记录](apostate-runtime-acceptance.md)。官方 ZIP 的 SxS 启动失败不能否定本地已导入二进制的上述实测，也不能由本机可运行反推官方 ZIP 已修复。本次未修改 CI 的内核发布/打包方式。
++
++提交与 CI 具体运行链接在交付消息列出；最终 evidence 中的 sourceCommit 是运行时基线，dirtyPaths 与代码 diff 用于对应尚未提交的本次修改，避免冒充已提交版本的干净运行。
+diff --git a/src/main/engines/apostate/adapter.test.ts b/src/main/engines/apostate/adapter.test.ts
+index 962cadc..39ea061 100644
+--- a/src/main/engines/apostate/adapter.test.ts
++++ b/src/main/engines/apostate/adapter.test.ts
+@@ -1,8 +1,12 @@
+-import { describe, expect, it } from 'vitest'
++import { describe, expect, it, vi } from 'vitest'
+ import { defaultProfileDraft } from '../../../shared/defaults'
+ import type { BrowserProfile } from '../../../shared/types'
+ import { buildApostateLaunchArgs } from './adapter'
+ 
++vi.mock('../../host-hardware', () => ({ hostHardwareSnapshot: () => ({
++  platform: 'windows', platformVersion: '10.0.0', hardwareConcurrency: 16, physicalMemoryGb: 64
++}) }))
++
+ function profile(): BrowserProfile {
+   const now = new Date().toISOString()
+   return {
+@@ -138,18 +142,115 @@ describe('Apostate adapter', () => {
+       .toEqual({ cpu: { logical_cores: 8 }, memory: { total_bytes: 8589934592 } })
+   })
+ 
+-  it('ignores legacy WebRTC policy when host or authored profile mode takes precedence', () => {
++  it('rejects unsupported WebRTC policy in host and authored modes too', () => {
+     const authored = profile()
+     authored.fingerprint.hardwareProfileId = 'legacy-custom'
+     authored.fingerprint.apostateProfileJson = JSON.stringify({ cpu: { logical_cores: 8 } })
+     authored.fingerprint.webrtcPolicy = 'public_only'
+-    expect(() => buildApostateLaunchArgs(authored, { userDataDir: 'C:\\profiles\\authored-webrtc' })).not.toThrow()
++    expect(() => buildApostateLaunchArgs(authored, { userDataDir: 'C:\\profiles\\authored-webrtc' })).toThrow('public_only')
+ 
+     const host = profile()
+     host.fingerprint.hardwareProfileId = process.platform === 'win32' ? 'windows-host' : 'macos-host'
+     host.fingerprint.platform = process.platform === 'win32' ? 'windows' : 'macos'
+     host.fingerprint.webrtcPolicy = 'public_only'
+-    expect(() => buildApostateLaunchArgs(host, { userDataDir: 'C:\\profiles\\host-webrtc' })).not.toThrow()
++    expect(() => buildApostateLaunchArgs(host, { userDataDir: 'C:\\profiles\\host-webrtc' })).toThrow('public_only')
++  })
++
++  it.each(['host', 'seed', 'custom'] as const)('keeps %s mode exclusive with either supported WebRTC policy', (mode) => {
++    for (const policy of ['default', 'proxy_only'] as const) {
++      const next = profile()
++      next.fingerprint.hardwareProfileId = mode === 'host'
++        ? (process.platform === 'win32' ? 'windows-host' : 'macos-host') : 'legacy-custom'
++      next.fingerprint.apostateProfileJson = mode === 'custom' ? '{"cpu":{"logical_cores":2}}' : ''
++      next.fingerprint.webrtcPolicy = policy
++      const args = buildApostateLaunchArgs(next, { userDataDir: 'test' })
++      expect(args.filter(a => a.startsWith('--fingerprint=') || a.startsWith('--apostate-profile='))).toHaveLength(1)
++      expect(args.includes('--fingerprint=host')).toBe(mode === 'host')
++      expect(args.some(a => a.startsWith('--apostate-profile='))).toBe(mode === 'custom')
++      expect(args.includes('--fingerprint-webrtc-udp=block')).toBe(policy === 'proxy_only')
++    }
++  })
++
++  it.each([1, 42, 0xffffffff])('passes seed %s unchanged despite legacy GPU buckets', seed => {
++    const next = profile()
++    next.fingerprint.seed = seed
++    next.fingerprint.hardwareProfileId = 'windows-11-rtx4060'
++    next.fingerprint.gpuBucket = 29
++    expect(buildApostateLaunchArgs(next, { userDataDir: 'test' })).toContain(`--fingerprint=${seed}`)
++  })
++
++  it('rejects seed zero because Apostate interprets it as host mode', () => {
++    const next = profile()
++    next.fingerprint.seed = 0
++    expect(() => buildApostateLaunchArgs(next, { userDataDir: 'test' })).toThrow('种子')
++  })
++
++  it('floors fractional host memory before emitting the integer GiB switch', () => {
++    const next = profile()
++    next.fingerprint.hardwareProfileId = 'legacy-custom'
++    next.fingerprint.deviceMemoryGb = 16
++    expect(buildApostateLaunchArgs(next, { userDataDir: 'test', hostMemoryGb: 7.8 }))
++      .toContain('--fingerprint-device-memory=7')
++  })
++
++  it('rejects a window larger than its claimed screen', () => {
++    for (const custom of [false, true]) {
++      const next = profile()
++      next.fingerprint.hardwareProfileId = 'legacy-custom'
++      next.fingerprint.screenWidth = 1024
++      next.fingerprint.screenHeight = 768
++      next.fingerprint.apostateProfileJson = custom ? '{"screen":{"width":1024,"height":768}}' : ''
++      next.window = { mode: 'custom', width: 1200, height: 800, x: 0, y: 0 }
++      expect(() => buildApostateLaunchArgs(next, { userDataDir: 'test' })).toThrow('窗口')
++    }
++  })
++
++  it('rejects an invalid or conflicting locale rather than silently changing navigator.language', () => {
++    const next = profile()
++    next.fingerprint.hardwareProfileId = 'legacy-custom'
++    next.fingerprint.networkIdentityMode = 'manual'
++    next.fingerprint.language = 'fr-FR'
++    next.fingerprint.acceptLanguages = 'en-US,en'
++    expect(() => buildApostateLaunchArgs(next, { userDataDir: 'test' })).toThrow('语言')
++    next.fingerprint.language = 'en-US'
++    next.fingerprint.acceptLanguages = 'en-US;q=0.9,en'
++    expect(() => buildApostateLaunchArgs(next, { userDataDir: 'test' })).toThrow('语言')
++  })
++
++  it('validates GPU family at the launch boundary as well as on save', () => {
++    const next = profile()
++    next.fingerprint.hardwareProfileId = 'legacy-custom'
++    next.fingerprint.gpuAnchor = 'auto'
++    next.fingerprint.gpuRenderer = 'unmatched renderer'
++    expect(() => buildApostateLaunchArgs(next, { userDataDir: 'test' })).toThrow('GPU')
++  })
++
++  it.each([0, -1, 1.5, NaN, Infinity, 4097])('rejects invalid CPU or memory %s before spawning', value => {
++    for (const field of ['hardwareConcurrency', 'deviceMemoryGb'] as const) {
++      const next = profile()
++      next.fingerprint.hardwareProfileId = 'legacy-custom'
++      next.fingerprint[field] = value
++      expect(() => buildApostateLaunchArgs(next, { userDataDir: 'test' })).toThrow('整数')
++    }
++  })
++
++  it('lets an authored device explicitly take precedence over a host template and seed zero', () => {
++    const next = profile()
++    next.fingerprint.hardwareProfileId = process.platform === 'win32' ? 'windows-host' : 'macos-host'
++    next.fingerprint.seed = 0
++    next.fingerprint.apostateProfileJson = '{"cpu":{"logical_cores":2}}'
++    const args = buildApostateLaunchArgs(next, { userDataDir: 'test' })
++    expect(args.some(a => a.startsWith('--apostate-profile='))).toBe(true)
++    expect(args.some(a => a.startsWith('--fingerprint='))).toBe(false)
++    expect(JSON.parse(next.fingerprint.apostateProfileJson)).toEqual({ cpu: { logical_cores: 2 } })
++  })
++
++  it.each([1, 8, 16, 32])('limits configured CPU %s without exceeding host limits', cores => {
++    const next = profile()
++    next.fingerprint.hardwareProfileId = 'legacy-custom'
++    next.fingerprint.hardwareConcurrency = cores
++    expect(buildApostateLaunchArgs(next, { userDataDir: 'test', hostHardwareConcurrency: 8 }))
++      .toContain(`--fingerprint-hardware-concurrency=${Math.min(cores, 8)}`)
+   })
+ 
+   it('does not silently translate public_only WebRTC semantics', () => {
+diff --git a/src/main/engines/apostate/adapter.ts b/src/main/engines/apostate/adapter.ts
+index 868b6a2..1cc0548 100644
+--- a/src/main/engines/apostate/adapter.ts
++++ b/src/main/engines/apostate/adapter.ts
+@@ -1,5 +1,6 @@
+ import type { BrowserProfile } from '../../../shared/types'
+-import { effectiveFingerprintSeed, hardwareProfile } from '../../../shared/hardware-profiles'
++import { hardwareProfile } from '../../../shared/hardware-profiles'
++import { hostHardwareSnapshot } from '../../host-hardware'
+ import { effectiveNetworkIdentity } from '../../../shared/network-identity'
+ import { validateApostateProfileJson } from '../../../shared/apostate-profile-validation'
+ import {
+@@ -18,10 +19,17 @@ export function profileWindowName(profile: Pick<BrowserProfile, 'serialNumber' |
+   return `[${profile.serialNumber}] ${name}`
+ }
+ 
+-function assertSafeLocale(value: string): string {
++function assertSafeLocale(value: string, language: string): string {
+   const normalized = value.trim()
+-  if (!normalized || /[\r\n]/.test(normalized)) throw new Error('Apostate 语言列表无效')
+-  return normalized
++  try {
++    const tags = normalized.split(',').map(tag => Intl.getCanonicalLocales(tag.trim())[0])
++    if (!tags.length || tags.some(tag => !tag) || tags[0] !== Intl.getCanonicalLocales(language.trim())[0]) {
++      throw new Error('conflicting primary locale')
++    }
++    return tags.join(',')
++  } catch {
++    throw new Error('Apostate 语言列表必须由语言标签组成，首项必须与界面语言一致')
++  }
+ }
+ 
+ export function assertApostateCompatible(profile: BrowserProfile): void {
+@@ -36,9 +44,28 @@ export function assertApostateCompatible(profile: BrowserProfile): void {
+   if (!authoredProfileJson && fp.disabledSpoofing.length && !hostMode) {
+     throw new Error('Apostate 不支持 Prism 的“关闭部分伪装”配置，请清空该配置后再启动')
+   }
+-  if (!authoredProfileJson && !hostMode && fp.webrtcPolicy === 'public_only') {
++  if (fp.webrtcPolicy === 'public_only') {
+     throw new Error('Apostate 尚未验证 public_only WebRTC 语义，请改用“代理 UDP”或“内核默认”')
+   }
++  if (!authoredProfileJson && !hostMode) {
++    if (!Number.isInteger(fp.seed) || fp.seed < 1 || fp.seed > 0xffffffff) {
++      throw new Error('Apostate Seed 模式种子必须是 1–4294967295；0 表示主机模式')
++    }
++    if (!['windows', 'macos'].includes(fp.platform)) throw new Error('Apostate 平台配置无效')
++    for (const [name, value, maximum] of [
++      ['CPU', fp.hardwareConcurrency, 4096], ['屏幕宽度', fp.screenWidth, 65535],
++      ['屏幕高度', fp.screenHeight, 65535], ['设备内存', fp.deviceMemoryGb ?? hardware?.physicalMemoryGb ?? 8, 4096]
++    ] as const) {
++      if (!Number.isInteger(value) || value < 1 || value > maximum) throw new Error(`Apostate ${name}必须是 1–${maximum} 的整数`)
++    }
++    const anchor = apostateAnchorForHardwareProfile(hardware, fp.gpuAnchor)
++    const knownAnchors = ['windows-d3d11-intel-79dfeb5b4f99', 'windows-d3d11-nvidia-0947761dfbe9',
++      'windows-d3d11-qualcomm-6388f9914f3f', 'macos-metal-apple-850a91233555']
++    if ((anchor && (!knownAnchors.includes(anchor) || !anchor.startsWith(`${fp.platform}-`)))
++      || (fp.gpuRenderer?.trim() && !anchor)) {
++      throw new Error('Apostate GPU renderer 必须配合与平台一致的固定 GPU 家族')
++    }
++  }
+ }
+ 
+ export function buildApostateLaunchArgs(profile: BrowserProfile, options: ApostateLaunchOptions): string[] {
+@@ -47,6 +74,12 @@ export function buildApostateLaunchArgs(profile: BrowserProfile, options: Aposta
+   const hardware = hardwareProfile(fp.hardwareProfileId)
+   const authoredProfileJson = validateApostateProfileJson(fp.apostateProfileJson ?? '')
+   const hostMode = !authoredProfileJson && hardware?.hostMatched === true
++  const actualHost = hostHardwareSnapshot()
++  const hostCores = Math.min(actualHost.hardwareConcurrency, options.hostHardwareConcurrency ?? actualHost.hardwareConcurrency)
++  const hostMemoryGb = Math.min(actualHost.physicalMemoryGb, options.hostMemoryGb ?? actualHost.physicalMemoryGb)
++  if (!Number.isInteger(hostCores) || hostCores < 1 || !Number.isFinite(hostMemoryGb) || hostMemoryGb < 1) {
++    throw new Error('Apostate 宿主 CPU 或内存限制无效')
++  }
+   const args = [`--user-data-dir=${options.userDataDir}`]
+ 
+   if (authoredProfileJson) {
+@@ -54,15 +87,13 @@ export function buildApostateLaunchArgs(profile: BrowserProfile, options: Aposta
+       cpu?: { logical_cores?: number }
+       memory?: { total_bytes?: number }
+     }
+-    if (Number.isInteger(options.hostHardwareConcurrency) && (options.hostHardwareConcurrency ?? 0) > 0
+-      && typeof authoredProfile.cpu?.logical_cores === 'number') {
+-      authoredProfile.cpu.logical_cores = Math.min(authoredProfile.cpu.logical_cores, options.hostHardwareConcurrency!)
++    if (typeof authoredProfile.cpu?.logical_cores === 'number') {
++      authoredProfile.cpu.logical_cores = Math.min(authoredProfile.cpu.logical_cores, hostCores)
+     }
+-    if (Number.isFinite(options.hostMemoryGb) && (options.hostMemoryGb ?? 0) > 0
+-      && typeof authoredProfile.memory?.total_bytes === 'number') {
++    if (typeof authoredProfile.memory?.total_bytes === 'number') {
+       authoredProfile.memory.total_bytes = Math.min(
+         authoredProfile.memory.total_bytes,
+-        Math.floor(options.hostMemoryGb! * (1024 ** 3))
++        Math.floor(hostMemoryGb * (1024 ** 3))
+       )
+     }
+     const effectiveProfileJson = JSON.stringify(authoredProfile)
+@@ -71,29 +102,26 @@ export function buildApostateLaunchArgs(profile: BrowserProfile, options: Aposta
+     // Apostate host mode composes nothing. Do not send per-field overrides.
+     args.push('--fingerprint=host')
+   } else {
+-    const hardwareConcurrency = options.hostHardwareConcurrency
+-      ? Math.min(fp.hardwareConcurrency, options.hostHardwareConcurrency)
+-      : fp.hardwareConcurrency
++    const hardwareConcurrency = Math.min(fp.hardwareConcurrency, hostCores)
+     const networkIdentity = effectiveNetworkIdentity(fp, options.proxyIdentity, {
+       allowGeoConflict: options.allowGeoConflict
+     })
+-    const locale = assertSafeLocale(networkIdentity.acceptLanguages || fp.acceptLanguages || networkIdentity.language || fp.language)
++    const locale = assertSafeLocale(networkIdentity.acceptLanguages || fp.acceptLanguages || networkIdentity.language || fp.language, networkIdentity.language)
++    try { new Intl.DateTimeFormat('en', { timeZone: networkIdentity.timezone }).format() }
++    catch { throw new Error('Apostate 时区必须是有效 IANA 时区') }
+     args.push(
+-      `--fingerprint=${effectiveFingerprintSeed(fp)}`,
++      `--fingerprint=${fp.seed}`,
+       `--fingerprint-platform=${fp.platform}`,
+       `--fingerprint-hardware-concurrency=${hardwareConcurrency}`,
+       `--fingerprint-screen-width=${fp.screenWidth}`,
+       `--fingerprint-screen-height=${fp.screenHeight}`,
+       `--fingerprint-locale=${locale}`,
+-      `--fingerprint-timezone=${networkIdentity.timezone}`,
+-      `--lang=${networkIdentity.language}`
++      `--fingerprint-timezone=${networkIdentity.timezone}`
+     )
+ 
+     const configuredMemory = fp.deviceMemoryGb ?? hardware?.physicalMemoryGb
+     if (configuredMemory !== undefined) {
+-      const memoryGb = options.hostMemoryGb && options.hostMemoryGb > 0
+-        ? Math.min(configuredMemory, options.hostMemoryGb)
+-        : configuredMemory
++      const memoryGb = Math.min(configuredMemory, Math.floor(hostMemoryGb))
+       args.push(`--fingerprint-device-memory=${memoryGb}`)
+     }
+ 
+@@ -116,6 +144,14 @@ export function buildApostateLaunchArgs(profile: BrowserProfile, options: Aposta
+     : authoredProfileJson
+       ? Math.min(profile.window.height, authoredScreen?.screen?.height ?? profile.window.height)
+       : hostMode ? profile.window.height : fp.screenHeight
++  if (![windowWidth, windowHeight].every(value => Number.isInteger(value) && value > 0)) {
++    throw new Error('Apostate 窗口尺寸必须是正整数')
++  }
++  const screen = authoredScreen?.screen ?? (hostMode ? undefined : { width: fp.screenWidth, height: fp.screenHeight })
++  if ((screen?.width !== undefined && windowWidth > screen.width)
++    || (screen?.height !== undefined && windowHeight > screen.height)) {
++    throw new Error('Apostate 窗口尺寸不能大于声明的屏幕尺寸')
++  }
+   args.push(
+     `--window-size=${windowWidth},${windowHeight}`,
+     `--window-name=${profileWindowName(profile)}`,
+diff --git a/src/main/engines/apostate/capabilities.ts b/src/main/engines/apostate/capabilities.ts
+index 8c9097a..eae33d0 100644
+--- a/src/main/engines/apostate/capabilities.ts
++++ b/src/main/engines/apostate/capabilities.ts
+@@ -17,7 +17,7 @@ export interface ApostateCapability {
+ export const APOSTATE_CAPABILITIES: readonly ApostateCapability[] = [
+   { key: 'hostMode', status: 'supported', switchName: '--fingerprint=host', note: '真实主机模式；不组合 persona，也不应用逐字段覆盖' },
+   { key: 'fingerprint', status: 'supported', switchName: '--fingerprint', note: '稳定的环境种子；同一宿主 CPU 家族下可复现' },
+-  { key: 'platform', status: 'supported', switchName: '--fingerprint-platform', note: '仅允许 windows、macos 或 linux' },
++  { key: 'platform', status: 'supported', switchName: '--fingerprint-platform', note: 'abcBrowser 当前提供 windows、macos；内核另支持 linux' },
+   { key: 'hardwareConcurrency', status: 'supported', switchName: '--fingerprint-hardware-concurrency', note: '不能超过宿主逻辑核心数；启动前会保守限制' },
+   { key: 'deviceMemory', status: 'supported', switchName: '--fingerprint-device-memory', note: '按 GiB 设置并限制在宿主物理内存范围内' },
+   { key: 'screen', status: 'supported', switchName: '--fingerprint-screen-width/height', note: '受窗口和桌面区域约束' },
+@@ -26,8 +26,8 @@ export const APOSTATE_CAPABILITIES: readonly ApostateCapability[] = [
+   { key: 'gpuAnchor', status: 'supported', switchName: '--fingerprint-anchor', note: '使用 Apostate 官方 GPU 家族 ID；auto 交由种子选择' },
+   { key: 'gpuRenderer', status: 'supported', switchName: '--fingerprint-gpu-renderer', note: '精确 renderer 必须属于所选 GPU 家族，内核会校验' },
+   { key: 'canvasWebglNoise', status: 'supported', switchName: '--fingerprint-noise', note: '可选、默认关闭；主机模式下无效' },
+-  { key: 'fingerprintExplain', status: 'supported', switchName: '--fingerprint-explain', note: '打印内核实际组合报告和 limitations，不打开浏览器窗口' },
+-  { key: 'customProfile', status: 'supported', switchName: '--apostate-profile', note: '官方 v3 JSON schema；替代 seed composition，未填写字段继承宿主值' },
++  { key: 'fingerprintExplain', status: 'supported', switchName: '--fingerprint-explain', note: 'Host/Seed 打印组合报告后退出；Custom Profile 不保证输出或退出，必须使用 API 验证' },
++  { key: 'customProfile', status: 'supported', switchName: '--apostate-profile', note: '官方 v3 JSON schema；明确优先于 Host/Seed，忽略其逐字段设置。省略字段原则上继承宿主，但本地 155.0.8059.31 省略语言时实测回退 en-US，应显式填写 locale' },
+   { key: 'webrtc', status: 'supported', switchName: '--fingerprint-webrtc-udp', note: 'proxy_only 映射为 block；default 保持内核默认' },
+   { key: 'brandVersion', status: 'unsupported', note: '品牌版本由实际 Apostate 二进制决定' },
+   { key: 'platformVersion', status: 'unsupported', note: '没有确认的等效启动参数' },
+diff --git a/src/main/engines/apostate/types.ts b/src/main/engines/apostate/types.ts
+index 9643cea..aa16016 100644
+--- a/src/main/engines/apostate/types.ts
++++ b/src/main/engines/apostate/types.ts
+@@ -7,7 +7,9 @@ export interface ApostateLaunchOptions {
+   extensionPaths?: string[]
+   engineVersion?: string
+   fingerprintKernel?: boolean
++  /** Optional tighter limits; the adapter always checks the real host too. */
+   hostHardwareConcurrency?: number
++  /** Physical GiB, possibly fractional. Seed switches require whole GiB. */
+   hostMemoryGb?: number
+   hostPlatformVersion?: string
+   proxyIdentity?: ProxyCheckSummary
+diff --git a/src/main/host-hardware.test.ts b/src/main/host-hardware.test.ts
+new file mode 100644
+index 0000000..c844b0e
+--- /dev/null
++++ b/src/main/host-hardware.test.ts
+@@ -0,0 +1,13 @@
++import { describe, expect, it, vi } from 'vitest'
++import { hostHardwareSnapshot } from './host-hardware'
++import { availableParallelism, totalmem } from 'node:os'
++
++vi.mock('node:os', () => ({ availableParallelism: vi.fn(), totalmem: vi.fn(), release: () => '10.0.26100' }))
++
++describe('physical host limits', () => {
++  it.each([1, 16, 128])('does not invent or truncate a %s-core host', cores => {
++    vi.mocked(availableParallelism).mockReturnValue(cores)
++    vi.mocked(totalmem).mockReturnValue(7.8 * 1024 ** 3)
++    expect(hostHardwareSnapshot()).toMatchObject({ hardwareConcurrency: cores, physicalMemoryGb: 7.8 })
++  })
++})
+diff --git a/src/main/host-hardware.ts b/src/main/host-hardware.ts
+index 33ed84b..0f4f9a7 100644
+--- a/src/main/host-hardware.ts
++++ b/src/main/host-hardware.ts
+@@ -21,7 +21,7 @@ export function hostHardwareSnapshot(): HostHardwareSnapshot {
+   return {
+     platform,
+     platformVersion: hostPlatformVersion(platform, release()),
+-    hardwareConcurrency: Math.max(2, Math.min(64, availableParallelism())),
+-    physicalMemoryGb: Math.max(1, Math.floor(totalmem() / (1024 ** 3)))
++    hardwareConcurrency: Math.max(1, availableParallelism()),
++    physicalMemoryGb: totalmem() / (1024 ** 3)
+   }
+ }
+diff --git a/src/renderer/src/ProfileEditor.tsx b/src/renderer/src/ProfileEditor.tsx
+index 103d63d..a7034fe 100644
+--- a/src/renderer/src/ProfileEditor.tsx
++++ b/src/renderer/src/ProfileEditor.tsx
+@@ -24,7 +24,6 @@ import { defaultPlatform, defaultProfileDraft, randomSeed } from '../../shared/d
+ import {
+   applyHardwareProfile,
+   defaultApostateGpuAnchor,
+-  effectiveGpuIdentity,
+   HARDWARE_PROFILES,
+   hardwareProfile,
+   hardwareProfileSummary,
+@@ -103,8 +102,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
+   const fingerprintGpuAnchor = Form.useWatch(['fingerprint', 'gpuAnchor'], form) ?? 'auto'
+   const apostateProfileJson = Form.useWatch(['fingerprint', 'apostateProfileJson'], form) ?? ''
+   const customProfileEnabled = apostateProfileJson.trim().length > 0
+-  const fingerprintSeed = Form.useWatch(['fingerprint', 'seed'], form) ?? 0
+-  const fingerprintGpuBucket = Form.useWatch(['fingerprint', 'gpuBucket'], form)
+   const kernelVersion = Form.useWatch('kernelVersion', form) ?? ''
+   const windowMode = Form.useWatch(['window', 'mode'], form) ?? 'auto'
+   const [testingProxy, setTestingProxy] = useState(false)
+@@ -122,11 +119,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
+       { value: 'auto', label: '自动选择（由种子决定）' },
+       { value: 'macos-metal-apple-850a91233555', label: 'macOS · Apple · Metal' }
+     ]
+-  const selectedGpuIdentity = effectiveGpuIdentity({
+-    hardwareProfileId,
+-    seed: fingerprintSeed,
+-    gpuBucket: fingerprintGpuBucket
+-  })
+   const hostPlatform = defaultPlatform()
+   const timezoneMismatch = Boolean(proxyResult?.timezone && fingerprintTimezone && proxyResult.timezone !== fingerprintTimezone)
+   const networkIdentity = effectiveNetworkIdentity({
+@@ -468,7 +460,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
+           type="warning"
+           showIcon
+           message="Apostate 自定义 Profile v3 已启用"
+-          description="自定义 profile 会替代种子组合；JSON 中未填写的字段继承宿主值。下方硬件模板、种子、GPU、内存、语言和时区字段不会传给内核。请用网页运行时检查核验，explain 报告不适用于此模式。"
++          description="自定义 profile 明确优先于 Host/Seed；下方硬件模板、种子、GPU、内存、语言和时区字段不会传给内核。省略字段原则上继承宿主，但本地内核省略语言时实测回退 en-US，请显式填写 locale。请用网页运行时检查核验，explain 报告不适用于此模式。"
+         />
+       )}
+       {selectedHardware?.hostMatched && !customProfileEnabled && (
+@@ -511,12 +503,12 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
+       >
+         <Input disabled={customProfileEnabled || selectedHardware?.hostMatched || fingerprintGpuAnchor === 'auto'} placeholder="ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 …)" />
+       </Form.Item>
+-      {selectedHardware?.renderIdentityMode === 'seeded-curated' && !customProfileEnabled && !selectedGpuIdentity && (
++      {selectedHardware?.renderIdentityMode === 'seeded-curated' && !customProfileEnabled && (
+         <Alert
+           type="warning"
+           showIcon
+-          message={t("旧环境保持原有硬件信息")}
+-          description={t("如需更换，请点击下方“重新生成”。")}
++          message="GPU 型号由 Apostate catalogue 选择"
++          description="旧版 GPU bucket 不控制 Apostate 型号，也不会改写环境种子；需要精确型号时，请固定 GPU 家族并填写其完整 renderer。"
+         />
+       )}
+       {hardwareProfileId === 'legacy-custom' && !customProfileEnabled && (
+diff --git a/src/shared/apostate-profile-validation.test.ts b/src/shared/apostate-profile-validation.test.ts
+index e763e36..451cdf1 100644
+--- a/src/shared/apostate-profile-validation.test.ts
++++ b/src/shared/apostate-profile-validation.test.ts
+@@ -52,4 +52,16 @@ describe('Apostate v3 profile schema validation', () => {
+   it('rejects oversized payloads before parsing or encoding', () => {
+     expect(() => validateApostateProfileJson('x'.repeat(13 * 1024))).toThrow('12 KiB')
+   })
++
++  it('rejects inherited Object.prototype names as unknown keys', () => {
++    for (const key of ['constructor', '__proto__', 'toString']) {
++      expect(() => validateApostateProfileJson(`{"${key}":{}}`)).toThrow('unexpected property')
++    }
++  })
++
++  it('rejects empty device payloads that could unexpectedly resume seed composition', () => {
++    for (const value of ['{}', '{"cpu":{}}', '{"source_capture":"reference"}']) {
++      expect(() => validateApostateProfileJson(value)).toThrow('有效设备字段')
++    }
++  })
+ })
+diff --git a/src/shared/apostate-profile-validation.ts b/src/shared/apostate-profile-validation.ts
+index 0216bc3..c0830f7 100644
+--- a/src/shared/apostate-profile-validation.ts
++++ b/src/shared/apostate-profile-validation.ts
+@@ -124,7 +124,7 @@ function validateNode(value: unknown, schema: JsonSchema, path: string, issues:
+     const properties = schema.properties ?? {}
+     for (const [key, childValue] of Object.entries(value)) {
+       if (schema.propertyNames) validateNode(key, schema.propertyNames, `${path} property name`, issues, depth + 1)
+-      const childSchema = properties[key]
++      const childSchema = Object.prototype.hasOwnProperty.call(properties, key) ? properties[key] : undefined
+       if (childSchema) {
+         validateNode(childValue, childSchema, `${path}.${key}`, issues, depth + 1)
+       } else if (schema.additionalProperties === false) {
+@@ -160,5 +160,11 @@ export function validateApostateProfileJson(input: string): string {
+   if (issues.length) {
+     throw new Error(`Apostate Profile v3 校验失败：${issues.slice(0, 6).join('；')}`)
+   }
++  // Empty objects (or provenance alone) are not a device profile to the native
++  // loader. Refuse them instead of accidentally falling through to composition.
++  if (isObject(value) && !Object.entries(value).some(([key, section]) =>
++    key !== 'id' && key !== 'source_capture' && isObject(section) && Object.keys(section).length > 0)) {
++    throw new Error('Apostate Profile 必须包含有效设备字段，不能只提供空对象或元数据')
++  }
+   return JSON.stringify(value)
+ }
+diff --git a/src/shared/hardware-profiles.ts b/src/shared/hardware-profiles.ts
+index 5a9f7dc..b01b108 100644
+--- a/src/shared/hardware-profiles.ts
++++ b/src/shared/hardware-profiles.ts
+@@ -60,8 +60,9 @@ export interface HardwareProfile {
+ }
+ 
+ /**
+- * These presets match the GPU ordering in fingerprint patch 011-gpu-info.
+- * Keep the bucket values in sync when the kernel GPU catalogue changes.
++ * GPU bucket metadata belongs to the former Prism fingerprint patch.
++ * Apostate uses its own family catalogue: these values must never rewrite its
++ * seed or be presented as evidence of the native GPU model.
+  */
+ export const HARDWARE_PROFILES: readonly HardwareProfile[] = [
+   {
+@@ -300,6 +301,7 @@ export function applyHardwareProfile(
+   }
+ }
+ 
++/** Legacy Prism bucket utility. Not an Apostate launch seed resolver. */
+ export function effectiveFingerprintSeed(config: FingerprintConfig): number {
+   const seed = config.seed >>> 0
+   const profile = hardwareProfile(config.hardwareProfileId)
+@@ -352,5 +354,5 @@ export function hardwareProfileSummary(id: HardwareProfileId): string {
+   const profile = hardwareProfile(id)
+   if (!profile) return '未知硬件模板'
+   if (profile.hostMatched) return `本机 CPU · 本机内存 · 本机 GPU · ${profile.screenWidth}×${profile.screenHeight}`
+-  return `${profile.hardwareConcurrency} 核 · ${profile.physicalMemoryGb}GB · ${profile.gpuModel} · ${profile.screenWidth}×${profile.screenHeight}`
++  return `${profile.hardwareConcurrency} 核 · ${profile.physicalMemoryGb}GB · GPU 型号由 Apostate 选择（模板仅参考家族） · ${profile.screenWidth}×${profile.screenHeight}`
+ }
+diff --git a/src/shared/validation.test.ts b/src/shared/validation.test.ts
+index 8827cd8..071a303 100644
+--- a/src/shared/validation.test.ts
++++ b/src/shared/validation.test.ts
+@@ -56,6 +56,17 @@ describe('profile validation', () => {
+     expect(result.fingerprint.seed).toBe(123456)
+   })
+ 
++  it('rejects zero in Seed mode but permits the inactive seed in Host/Custom modes', () => {
++    const draft = defaultProfileDraft()
++    draft.fingerprint.seed = 0
++    expect(() => validateProfileDraft(draft)).toThrow('种子不能为 0')
++    draft.fingerprint.hardwareProfileId = 'windows-host'
++    expect(validateProfileDraft(draft).fingerprint.seed).toBe(0)
++    draft.fingerprint.hardwareProfileId = 'legacy-custom'
++    draft.fingerprint.apostateProfileJson = '{"cpu":{"logical_cores":2}}'
++    expect(validateProfileDraft(draft).fingerprint.seed).toBe(0)
++  })
++
+   it('normalizes every hardware field from a coherent preset', () => {
+     const draft = defaultProfileDraft()
+     draft.fingerprint.hardwareProfileId = 'windows-11-rtx4070'
+diff --git a/src/shared/validation.ts b/src/shared/validation.ts
+index 63ce681..c1eb692 100644
+--- a/src/shared/validation.ts
++++ b/src/shared/validation.ts
+@@ -111,6 +111,9 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft {
+   if (!Number.isInteger(fp.seed) || fp.seed < 0 || fp.seed > 0xffffffff) {
+     throw new Error('指纹种子必须是 0–4294967295 的整数')
+   }
++  if (!customProfileActive && !selectedHardware?.hostMatched && fp.seed === 0) {
++    throw new Error('Apostate Seed 模式种子不能为 0（内核将 0 解释为主机模式）')
++  }
+   if (fp.gpuBucket !== undefined && (
+     !Number.isInteger(fp.gpuBucket)
+     || fp.gpuBucket < 0
+diff --git a/tools/apostate-runtime-acceptance/local.mjs b/tools/apostate-runtime-acceptance/local.mjs
+new file mode 100644
+index 0000000..b9da471
+--- /dev/null
++++ b/tools/apostate-runtime-acceptance/local.mjs
+@@ -0,0 +1,216 @@
++// Uses an existing runtime in place. Never downloads, patches, or repackages it.
++import { build } from 'esbuild'
++import { spawn, execFileSync } from 'node:child_process'
++import { createServer } from 'node:http'
++import { createSocket } from 'node:dgram'
++import { readFile, writeFile, mkdir, mkdtemp } from 'node:fs/promises'
++import { createHash } from 'node:crypto'
++import { tmpdir, platform, release, arch, cpus, totalmem } from 'node:os'
++import { resolve, join } from 'node:path'
++import { pathToFileURL } from 'node:url'
++
++const option = name => { const i = process.argv.indexOf(name); return i < 0 ? undefined : process.argv[i + 1] }
++const executable = option('--executable')
++if (!executable) throw Error('Usage: node tools/apostate-runtime-acceptance/local.mjs --executable C:\\path\\chrome.exe [--output directory] [--headless]')
++const output = resolve(option('--output') ?? `docs/testing/evidence/apostate-${new Date().toISOString().replace(/[:.]/g, '-')}`)
++await mkdir(output, { recursive: true })
++const work = await mkdtemp(join(tmpdir(), 'abc-apostate-local-'))
++const bundle = join(work, 'adapter.mjs')
++await build({ stdin: { contents: `export {buildLaunchArgs} from './src/main/launch-args'; export {defaultProfileDraft} from './src/shared/defaults'; export {hostHardwareSnapshot} from './src/main/host-hardware';`, resolveDir: process.cwd() }, bundle: true, platform: 'node', format: 'esm', outfile: bundle })
++const { buildLaunchArgs, defaultProfileDraft, hostHardwareSnapshot } = await import(pathToFileURL(bundle).href)
++const sha256 = bytes => createHash('sha256').update(bytes).digest('hex')
++const environment = { platform: platform(), release: release(), arch: arch(), cpus: cpus().length, cpuModel: cpus()[0]?.model, totalMemoryBytes: totalmem(), host: hostHardwareSnapshot(), executable: resolve(executable), executableSha256: sha256(await readFile(executable)), headed: !process.argv.includes('--headless'), node: process.version }
++await writeFile(join(output, 'environment.json'), JSON.stringify(environment, null, 2))
++const evidence = { startedAt: new Date().toISOString(), sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(), dirtyPaths: execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }), environment, checks: [], cases: {} }
++function check(name, status, details) { evidence.checks.push({ name, status, details }); console.log(`${status} ${name}: ${details}`) }
++const wait = ms => new Promise(r => setTimeout(r, ms))
++const headers = {}
++const server = createServer((req, res) => {
++  const url = new URL(req.url, 'http://localhost')
++  if (url.pathname === '/headers') { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ acceptLanguage: req.headers['accept-language'], userAgent: req.headers['user-agent'] })); return }
++  headers[url.searchParams.get('case')] = req.headers
++  res.setHeader('Content-Type', 'text/html; charset=utf-8')
++  res.end('<!doctype html><title>abcBrowser Apostate acceptance</title><h1>abcBrowser Apostate acceptance</h1><p>Loopback-only native API probe.</p>')
++})
++await new Promise(r => server.listen(0, '127.0.0.1', r))
++const url = `http://127.0.0.1:${server.address().port}`
++let stunPackets = 0
++const stun = createSocket('udp4')
++stun.on('message', (message, remote) => {
++  if (message.length < 20 || message.readUInt16BE(0) !== 1 || message.readUInt32BE(4) !== 0x2112a442) return
++  stunPackets++
++  const response = Buffer.alloc(32)
++  response.writeUInt16BE(0x0101, 0); response.writeUInt16BE(12, 2)
++  message.copy(response, 4, 4, 20)
++  response.writeUInt16BE(0x0020, 20); response.writeUInt16BE(8, 22); response[25] = 1
++  response.writeUInt16BE(remote.port ^ 0x2112, 26)
++  remote.address.split('.').forEach((part, i) => { response[28 + i] = Number(part) ^ message[4 + i] })
++  stun.send(response, remote.port, remote.address)
++})
++await new Promise(r => stun.bind(0, '127.0.0.1', r))
++const stunUrl = `stun:127.0.0.1:${stun.address().port}`
++async function stop(child) {
++  if (child.exitCode !== null) return
++  if (process.platform === 'win32') {
++    await new Promise(r => { const killer = spawn('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }); killer.on('exit', r); killer.on('error', r) })
++  } else child.kill('SIGTERM')
++}
++function launch(args, label) {
++  const child = spawn(executable, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
++  let stdout = '', stderr = '', startError
++  child.stdout.on('data', b => { stdout += b }); child.stderr.on('data', b => { stderr += b }); child.on('error', e => { startError = e.message })
++  return { child, async save() {
++    const safeArgs = args.map(a => a.startsWith('--user-data-dir=') ? '--user-data-dir=<isolated-temporary-profile>' : a.startsWith(url) ? '<loopback-probe>' : a)
++    await Promise.all([writeFile(join(output, `${label}.stdout.txt`), stdout), writeFile(join(output, `${label}.stderr.txt`), stderr), writeFile(join(output, `${label}.arguments.json`), JSON.stringify(safeArgs, null, 2))])
++    return { exitCode: child.exitCode, startError, stdout, stderr, arguments: safeArgs }
++  } }
++}
++async function cli(label, args) {
++  const run = launch([`--user-data-dir=${join(work, label)}`, ...args], label)
++  const deadline = Date.now() + 12000
++  while (run.child.exitCode === null && Date.now() < deadline) await wait(100)
++  const timeout = run.child.exitCode === null
++  if (timeout) await stop(run.child)
++  const result = await run.save(); result.timeout = timeout
++  evidence.cases[label] = result
++  return result
++}
++async function connect(endpoint) {
++  const ws = new WebSocket(endpoint)
++  await new Promise((r, j) => { ws.onopen = r; ws.onerror = j })
++  let nextId = 0
++  const pending = new Map()
++  ws.onmessage = event => { const value = JSON.parse(event.data); const item = pending.get(value.id); if (item) { pending.delete(value.id); clearTimeout(item.timer); value.error ? item.reject(Error(JSON.stringify(value.error))) : item.resolve(value.result) } }
++  return { ws, send(method, params = {}) { return new Promise((resolve, reject) => { const id = ++nextId; const timer = setTimeout(() => { pending.delete(id); reject(Error(`CDP timeout: ${method}`)) }, 12000); pending.set(id, { resolve, reject, timer }); ws.send(JSON.stringify({ id, method, params })) }) } }
++}
++function profile(mode) {
++  const p = { ...defaultProfileDraft(), id: 'acceptance', serialNumber: 1, name: `acceptance-${mode}`, status: 'closed', createdAt: '', updatedAt: '', favorite: false }
++  Object.assign(p.fingerprint, { hardwareProfileId: mode === 'host' ? 'windows-host' : 'legacy-custom', seed: 42, platform: 'windows', hardwareConcurrency: 2, deviceMemoryGb: 2, screenWidth: 1280, screenHeight: 900, language: 'en-GB', acceptLanguages: 'en-GB,en', timezone: 'Europe/London', gpuAnchor: 'auto', networkIdentityMode: 'manual', webrtcPolicy: 'proxy_only' })
++  p.window = { mode: 'custom', width: 1000, height: 700, x: 0, y: 0 }
++  p.startUrls = []
++  if (mode === 'custom') p.fingerprint.apostateProfileJson = JSON.stringify({ cpu: { logical_cores: 2 }, memory: { total_bytes: 2 * 1024 ** 3 }, screen: { width: 1280, height: 900, avail_width: 1280, avail_height: 852 }, locale: { application: 'en-GB', accept_languages: 'en-GB,en', timezone: 'Europe/London' } })
++  return p
++}
++async function browser(label, p, nativeConflictArgs = []) {
++  const dir = join(work, label)
++  const args = buildLaunchArgs(p, { userDataDir: dir, ...{ hostHardwareConcurrency: environment.host.hardwareConcurrency, hostMemoryGb: environment.host.physicalMemoryGb } })
++  args.push(...nativeConflictArgs, '--remote-debugging-port=0', ...(environment.headed ? [] : ['--headless=new']), `${url}/?case=${label}`)
++  const run = launch(args, label)
++  let cdp
++  const beforeStun = stunPackets
++  try {
++    let port
++    const deadline = Date.now() + 15000
++    while (!port && Date.now() < deadline && run.child.exitCode === null) { try { port = (await readFile(join(dir, 'DevToolsActivePort'), 'utf8')).split('\n')[0] } catch {} if (!port) await wait(100) }
++    if (!port) throw Error('No DevToolsActivePort; inspect raw stderr and Windows runtime environment')
++    let target
++    while (!target && Date.now() < deadline) {
++      const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()
++      target = targets.find(t => t.type === 'page' && t.url.startsWith(url))
++      if (!target) await wait(100)
++    }
++    if (!target) throw Error('Local probe page did not load')
++    cdp = await connect(target.webSocketDebuggerUrl)
++    // A target can be listed before its first navigation commits. Wait for the
++    // probe document instead of evaluating in Chromium's disposable initial context.
++    let ready = false
++    while (!ready && Date.now() < deadline) {
++      try {
++        const state = await cdp.send('Runtime.evaluate', { returnByValue: true, expression: `location.origin === ${JSON.stringify(url)} && document.readyState === 'complete'` })
++        ready = state.result?.value === true
++      } catch (error) { if (!/context|navigat/i.test(error.message)) throw error }
++      if (!ready) await wait(100)
++    }
++    if (!ready) throw Error('Probe document never became ready')
++    const probe = await cdp.send('Runtime.evaluate', { awaitPromise: true, returnByValue: true, expression: `(${async function (stunUrl) {
++      const canvas = document.createElement('canvas'); canvas.width = 240; canvas.height = 80
++      const ctx = canvas.getContext('2d'); ctx.fillStyle = '#ef7521'; ctx.fillRect(0, 0, 220, 70); ctx.fillStyle = '#184896'; ctx.font = '21px Arial'; ctx.fillText('Apostate edges 42', 3.5, 35.5); ctx.beginPath(); ctx.arc(85.3, 42.7, 23.4, 0, 6.283); ctx.stroke()
++      const gl = document.createElement('canvas').getContext('webgl'); let webgl = null
++      if (gl) { const ext = gl.getExtension('WEBGL_debug_renderer_info'); const pixels = new Uint8Array(4); gl.clearColor(.2,.4,.6,1); gl.clear(gl.COLOR_BUFFER_BIT); gl.readPixels(0,0,1,1,gl.RGBA,gl.UNSIGNED_BYTE,pixels); webgl = { vendor: ext && gl.getParameter(ext.UNMASKED_VENDOR_WEBGL), renderer: ext && gl.getParameter(ext.UNMASKED_RENDERER_WEBGL), pixels: Array.from(pixels) } }
++      const webrtc = { candidates: [], error: null, gatheringComplete: false }
++      try { const pc = new RTCPeerConnection({ iceServers: [{ urls: stunUrl }] }); pc.createDataChannel('probe'); pc.onicecandidate = e => { if (e.candidate) webrtc.candidates.push({ type: e.candidate.type, protocol: e.candidate.protocol }); else webrtc.gatheringComplete = true }; await pc.setLocalDescription(await pc.createOffer()); await new Promise(r => setTimeout(r, 1800)); pc.close() } catch(e) { webrtc.error = String(e) }
++      const result = { hardwareConcurrency: navigator.hardwareConcurrency, deviceMemory: navigator.deviceMemory, userAgent: navigator.userAgent, platform: navigator.platform, language: navigator.language, languages: [...navigator.languages], timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, screen: { width: screen.width, height: screen.height, availWidth: screen.availWidth, availHeight: screen.availHeight }, webgl, canvas: canvas.toDataURL(), webrtc, headers: await (await fetch('/headers')).json() }
++      document.body.innerHTML = '<h1>Apostate API evidence</h1><pre></pre>'; document.querySelector('pre').textContent = JSON.stringify({ ...result, canvas: '<saved in evidence JSON>' }, null, 2)
++      return result
++    }.toString()})(${JSON.stringify(stunUrl)})` })
++    if (probe.exceptionDetails || !probe.result?.value) throw Error(JSON.stringify(probe.exceptionDetails ?? probe))
++    const result = probe.result.value
++    result.stunRequests = stunPackets - beforeStun
++    result.canvasSha256 = sha256(result.canvas)
++    try { const screenshot = await cdp.send('Page.captureScreenshot'); await writeFile(join(output, `${label}.png`), Buffer.from(screenshot.data, 'base64')) } catch {}
++    evidence.cases[label] = { requested: p.fingerprint, runtime: result, effectiveArguments: (await run.save()).arguments }
++    await writeFile(join(output, `${label}.json`), JSON.stringify(evidence.cases[label], null, 2))
++    check(`${label} startup/API`, 'PASS', 'Native browser API result and screenshot captured')
++    return result
++  } catch(e) { check(`${label} startup/API`, 'BLOCKED', e.message); evidence.cases[label] = { error: e.message }; return null }
++  finally { cdp?.ws.close(); await stop(run.child); await run.save() }
++}
++function equal(name, actual, expected) { check(name, JSON.stringify(actual) === JSON.stringify(expected) ? 'PASS' : 'FAIL', `expected=${JSON.stringify(expected)} observed=${JSON.stringify(actual)}`) }
++try {
++  const hostExplain = await cli('host-explain', ['--fingerprint=host', '--fingerprint-explain'])
++  check('Host explain', /composition\s+disabled/.test(hostExplain.stdout) ? 'PASS' : 'FAIL', `exit=${hostExplain.exitCode}; raw stdout/stderr saved`)
++  const seedArgs = buildLaunchArgs(profile('seed'), { userDataDir: join(work, 'seed-explain') }).filter(a => !a.startsWith('--user-data-dir='))
++  const explain = await cli('seed-explain', [...seedArgs, '--fingerprint-explain'])
++  check('Seed explain', /seed\s+42/.test(explain.stdout) && explain.exitCode === 0 ? 'PASS' : 'FAIL', 'Exact adapter-generated switches; raw stdout/stderr saved')
++  if (hostExplain.startError || seedArgs.length === 0 || hostExplain.timeout || explain.timeout || explain.exitCode !== 0) throw Error('Existing binary did not pass explain; API checks are blocked')
++  const host = await browser('host', profile('host'))
++  const seed = await browser('seed', profile('seed'))
++  const custom = await browser('custom', profile('custom'))
++  if (host) equal('Host CPU equals physical host', host.hardwareConcurrency, environment.host.hardwareConcurrency)
++  for (const [name, result] of [['seed', seed], ['custom', custom]]) {
++    if (!result) continue
++    for (const [key, expected] of Object.entries({ hardwareConcurrency: 2, deviceMemory: 2, language: 'en-GB', languages: ['en-GB','en'], timezone: 'Europe/London' })) equal(`${name} ${key}`, result[key], expected)
++    equal(`${name} screen`, [result.screen.width, result.screen.height], [1280,900])
++    check(`${name} Canvas`, result.canvas.startsWith('data:image/png') ? 'PASS' : 'FAIL', result.canvasSha256)
++    check(`${name} WebGL`, result.webgl?.renderer ? 'PASS' : 'BLOCKED', JSON.stringify(result.webgl))
++    check(`${name} Accept-Language`, /^en-GB(?:,|$)/i.test(result.headers.acceptLanguage) ? 'PASS' : 'FAIL', result.headers.acceptLanguage)
++  }
++  for (const mode of ['42', 'host']) {
++    const conflict = await browser(`custom-with-${mode}`, profile('custom'), [`--fingerprint=${mode}`, '--fingerprint-platform=macos', '--fingerprint-hardware-concurrency=1'])
++    if (conflict) {
++      equal(`Native Custom overrides ${mode} CPU`, conflict.hardwareConcurrency, 2)
++      equal(`Native Custom overrides ${mode} platform`, conflict.platform, host?.platform)
++    }
++  }
++  const partial = profile('custom'); partial.fingerprint.apostateProfileJson = '{"cpu":{"logical_cores":2}}'
++  const inherited = await browser('partial', partial)
++  if (host && inherited) for (const key of ['deviceMemory','platform','userAgent','screen','language','languages','timezone','webgl','canvasSha256']) equal(`partial inherits ${key}`, inherited[key], host[key])
++  const repeat = await browser('seed-repeat', profile('seed'))
++  if (seed && repeat) for (const key of ['hardwareConcurrency','deviceMemory','language','languages','timezone','screen','webgl','canvasSha256']) equal(`repeat ${key}`, repeat[key], seed[key])
++  const changed = profile('seed'); changed.fingerprint.seed = 43
++  const changedResult = await browser('seed-changed', changed)
++  check('Different seeds API identity', seed && changedResult && JSON.stringify(seed.webgl) !== JSON.stringify(changedResult.webgl) ? 'PASS' : 'UNVERIFIED', 'A different seed need not change every explicitly pinned API value')
++  const noise = profile('seed'); noise.fingerprint.canvasWebglNoise = true
++  const noisy = await browser('seed-noise', noise)
++  check('Canvas edge noise changes readback', seed && noisy && seed.canvasSha256 !== noisy.canvasSha256 ? 'PASS' : 'UNVERIFIED', 'Edge/text probe compared; solid-color probes are insufficient')
++  const over = profile('seed'); over.fingerprint.hardwareConcurrency = 4096; over.fingerprint.deviceMemoryGb = 4096
++  const clamped = await browser('adapter-over-host', over)
++  if (clamped) equal('Adapter CPU clamp', clamped.hardwareConcurrency, environment.host.hardwareConcurrency)
++  const customOver = profile('custom'); customOver.fingerprint.apostateProfileJson = JSON.stringify({cpu:{logical_cores:4096},memory:{total_bytes:4096*1024**3}})
++  const customClamped = await browser('custom-over-host', customOver)
++  if (customClamped) equal('Custom CPU clamp', customClamped.hardwareConcurrency, environment.host.hardwareConcurrency)
++  if (host && customClamped) equal('Custom memory clamp bucket matches Host', customClamped.deviceMemory, host.deviceMemory)
++  const gpu = profile('seed'); gpu.fingerprint.gpuAnchor = 'windows-d3d11-intel-79dfeb5b4f99'; gpu.fingerprint.gpuRenderer = 'ANGLE (Intel, Intel(R) UHD Graphics 630 (0x00009BC8) Direct3D11 vs_5_0 ps_5_0, D3D11)'
++  const gpuExplain = await cli('gpu-explain', [...buildLaunchArgs(gpu, { userDataDir: join(work, 'gpu-explain') }).filter(a => !a.startsWith('--user-data-dir=')), '--fingerprint-explain'])
++  check('Pinned GPU explain', gpuExplain.exitCode === 0 && gpuExplain.stdout.includes('d3d11-intel-uhd-graphics-630') ? 'PASS' : 'UNVERIFIED', 'Catalogue row must identify the pinned model; raw output saved')
++  const gpuResult = await browser('gpu-pinned', gpu)
++  if (gpuResult?.webgl) equal('Pinned GPU renderer', gpuResult.webgl.renderer, gpu.fingerprint.gpuRenderer)
++  const direct = profile('seed'); direct.fingerprint.webrtcPolicy = 'default'
++  const control = await browser('webrtc-control', direct)
++  check('Controlled loopback STUN blocked', control?.stunRequests > 0 && seed?.stunRequests === 0 ? 'PASS' : 'UNVERIFIED', `control=${control?.stunRequests}; block=${seed?.stunRequests}; no public destination used`)
++  check('Public WebRTC/STUN/TURN leak path', 'UNVERIFIED', 'No external controlled STUN/TURN or proxy relay test was authorized/provisioned')
++  for (const [label, args] of [
++    ['host-field-conflict', ['--fingerprint=host', '--fingerprint-hardware-concurrency=2']],
++    ['raw-over-host-cpu', ['--fingerprint=42', `--fingerprint-hardware-concurrency=${environment.host.hardwareConcurrency+4}`]],
++    ['raw-over-host-memory', ['--fingerprint=42', `--fingerprint-device-memory=${Math.ceil(environment.host.physicalMemoryGb)+8}`]]
++  ]) { const result = await cli(label, [...args, '--fingerprint-explain']); check(label, result.exitCode !== 0 && !result.timeout && /apostate:/i.test(result.stderr) ? 'PASS' : 'FAIL', `Expected explicit native refusal, exit=${result.exitCode}; inspect raw stderr`) }
++} catch(e) { check('Acceptance execution', 'BLOCKED', e.stack) }
++finally {
++  server.close(); stun.close()
++  evidence.completedAt = new Date().toISOString()
++  evidence.runtimeExecutableUnchanged = sha256(await readFile(executable)) === environment.executableSha256
++  check('Existing runtime executable unchanged', evidence.runtimeExecutableUnchanged ? 'PASS' : 'FAIL', environment.executableSha256)
++  await writeFile(join(output, 'evidence.json'), JSON.stringify(evidence, null, 2))
++  console.log(`Evidence: ${output}`)
++  if (evidence.checks.some(c => c.status === 'FAIL' || c.status === 'BLOCKED')) process.exitCode = 1
++}
+diff --git a/tools/apostate-runtime-acceptance/run.ps1 b/tools/apostate-runtime-acceptance/run.ps1
+index 469742d..b91194b 100644
+--- a/tools/apostate-runtime-acceptance/run.ps1
++++ b/tools/apostate-runtime-acceptance/run.ps1
+@@ -581,20 +581,8 @@ try {
+ 
+   $conflictingProfileJson = ConvertTo-Json -InputObject @{ cpu = @{ logical_cores = 2 } } -Compress
+   $conflictingProfileBase64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($conflictingProfileJson))
+-  $customProfileConflict = Invoke-Apostate -Label 'custom-profile-conflict' -Arguments @(
+-    "--user-data-dir=$(Join-Path $script:workRoot 'custom-profile-conflict-profile')",
+-    "--apostate-profile=$conflictingProfileBase64",
+-    '--fingerprint=42',
+-    '--fingerprint-platform=windows',
+-    '--fingerprint-anchor=windows-d3d11-intel-79dfeb5b4f99',
+-    '--fingerprint-noise',
+-    '--fingerprint-explain'
+-  )
+-  if ($customProfileConflict.ExitCode -eq 0) {
+-    Add-Check -Name 'custom profile rejects Seed and per-field overrides' -Status 'FAIL' -Details 'Apostate accepted a custom profile together with a seed/platform/GPU/noise override set.'
+-  } else {
+-    Add-Check -Name 'custom profile rejects Seed and per-field overrides' -Status 'PASS' -Details "Rejected conflicting mode flags with exit code $($customProfileConflict.ExitCode)."
+-  }
++  # Authored device profiles take precedence and log ignored switches. Explain
++  # need not exit in this mode; test precedence through the API probe below.
+ 
+   $pagePath = $script:probePagePath
+   $html = @'
+@@ -630,6 +618,12 @@ try {
+     if (context) {
+       context.fillStyle = "#0f766e";
+       context.fillRect(0, 0, 16, 16);
++      context.fillStyle = "#e57321";
++      context.beginPath();
++      context.moveTo(0.3, 0.7);
++      context.lineTo(15.2, 8.4);
++      context.lineTo(2.6, 15.1);
++      context.fill();
+       canvasReadback = {
+         dataUrl: canvas.toDataURL(),
+         pixelSample: Array.from(context.getImageData(0, 0, 4, 2).data)
+@@ -840,12 +834,13 @@ try {
+   ) + $commonArgs + @($pageUri))
+   Assert-Equal -Name 'CPU request equal to host' -Actual $cpuEqualRuntime.hardwareConcurrency -Expected $script:hostLogicalProcessors
+ 
+-  $cpuOverHostRuntime = Read-RuntimeFromDom -Label 'cpu-over-host-runtime' -Arguments (@(
++  $cpuOverHostResult = Invoke-Apostate -Label 'cpu-over-host-runtime' -Arguments @(
+     "--user-data-dir=$(Join-Path $script:workRoot 'cpu-over-host-profile')",
+     '--fingerprint=42',
+-    "--fingerprint-hardware-concurrency=$($script:hostLogicalProcessors + 4)"
+-  ) + $commonArgs + @($pageUri))
+-  Assert-Equal -Name 'CPU request above host is clamped' -Actual $cpuOverHostRuntime.hardwareConcurrency -Expected $script:hostLogicalProcessors
++    "--fingerprint-hardware-concurrency=$($script:hostLogicalProcessors + 4)",
++    '--fingerprint-explain'
++  )
++  Assert-Equal -Name 'raw CPU above host is refused' -Actual $cpuOverHostResult.ExitCode -Expected 1
+ 
+   $invalidCpu = Invoke-Apostate -Label 'cpu-invalid-zero' -Arguments @(
+     "--user-data-dir=$(Join-Path $script:workRoot 'cpu-invalid-profile')",
+@@ -860,19 +855,13 @@ try {
+   }
+ 
+   $memoryRequestGb = [Math]::Ceiling($script:hostPhysicalMemoryBytes / 1GB) + 8
+-  $memoryOverHostRuntime = Read-RuntimeFromDom -Label 'memory-over-host-runtime' -Arguments (@(
++  $memoryOverHostResult = Invoke-Apostate -Label 'memory-over-host-runtime' -Arguments @(
+     "--user-data-dir=$(Join-Path $script:workRoot 'memory-over-host-profile')",
+     '--fingerprint=42',
+-    "--fingerprint-device-memory=$memoryRequestGb"
+-  ) + $commonArgs + @($pageUri))
+-  $memoryBuckets = @(0.25, 0.5, 1, 2, 4, 8)
+-  $memoryIsKnownBucket = $memoryBuckets -contains [double]$memoryOverHostRuntime.deviceMemory
+-  $memoryIsWithinHost = [double]$memoryOverHostRuntime.deviceMemory -le ($script:hostPhysicalMemoryBytes / 1GB)
+-  if ($memoryIsKnownBucket -and $memoryIsWithinHost) {
+-    Add-Check -Name 'device memory host clamp and Chromium bucket' -Status 'PASS' -Details "Requested $memoryRequestGb GiB; page observed $($memoryOverHostRuntime.deviceMemory) GiB from Chromium's exposed bucket."
+-  } else {
+-    Add-Check -Name 'device memory host clamp and Chromium bucket' -Status 'FAIL' -Details "Requested $memoryRequestGb GiB against $([Math]::Floor($script:hostPhysicalMemoryBytes / 1GB)) GiB physical RAM; page observed [$($memoryOverHostRuntime.deviceMemory)]."
+-  }
++    "--fingerprint-device-memory=$memoryRequestGb",
++    '--fingerprint-explain'
++  )
++  Assert-Equal -Name 'raw memory above host is refused' -Actual $memoryOverHostResult.ExitCode -Expected 1
+ 
+   $acceptLanguageHeader = [string]$seedRuntime.httpRequestHeaders.acceptLanguage
+   if ($acceptLanguageHeader -match '^en-GB(?:,|$)') {
+@@ -988,6 +977,15 @@ try {
+     "--apostate-profile=$partialProfileBase64"
+   ) + $commonArgs + @($pageUri))
+   Assert-Equal -Name 'partial profile explicit CPU' -Actual $partialProfileRuntime.hardwareConcurrency -Expected 2
++  $customProfileConflict = Read-RuntimeFromDom -Label 'custom-profile-conflict' -Arguments (@(
++    "--user-data-dir=$(Join-Path $script:workRoot 'custom-profile-conflict-profile')",
++    "--apostate-profile=$conflictingProfileBase64",
++    '--fingerprint=42',
++    '--fingerprint-platform=macos',
++    '--fingerprint-hardware-concurrency=1'
++  ) + $commonArgs + @($pageUri))
++  Assert-Equal -Name 'custom profile takes precedence over seed CPU' -Actual $customProfileConflict.hardwareConcurrency -Expected 2
++  Assert-Equal -Name 'custom profile ignores seed platform' -Actual $customProfileConflict.platform -Expected $hostRuntime.platform
+   Assert-Equal -Name 'partial profile inherits host memory' -Actual $partialProfileRuntime.deviceMemory -Expected $hostRuntime.deviceMemory
+   Assert-Equal -Name 'partial profile inherits host platform' -Actual $partialProfileRuntime.platform -Expected $hostRuntime.platform
+   Assert-Equal -Name 'partial profile inherits host User-Agent' -Actual $partialProfileRuntime.userAgent -Expected $hostRuntime.userAgent
+@@ -1048,15 +1046,15 @@ try {
+     cpu = [ordered]@{
+       requestedValue = [ordered]@{ belowHost = 2; equalHost = $script:hostLogicalProcessors; aboveHost = if ($null -ne $script:hostLogicalProcessors) { $script:hostLogicalProcessors + 4 } else { $null } }
+       effectiveValue = [ordered]@{ belowHost = $seedRuntime.hardwareConcurrency; equalHost = $cpuEqualRuntime.hardwareConcurrency; aboveHost = $cpuOverHostRuntime.hardwareConcurrency }
+-      constraint = 'Values above host logical processors must be clamped; zero is rejected; same-seed API outputs are compared across launches.'
+-      status = Get-CheckStatus -Name 'CPU request above host is clamped'
++      constraint = 'Raw switches above host logical processors are refused; application clamp is tested separately by local.mjs; zero is rejected.'
++      status = Get-CheckStatus -Name 'raw CPU above host is refused'
+       evidence = 'runtime.seed, runtime.cpuEqualHost, runtime.cpuOverHost, seed-determinism.json'
+     }
+     deviceMemory = [ordered]@{
+       requestedValue = [ordered]@{ configured = 2; aboveHost = if ($null -ne $script:hostPhysicalMemoryBytes) { [Math]::Ceiling($script:hostPhysicalMemoryBytes / 1GB) + 8 } else { $null } }
+       effectiveValue = [ordered]@{ configured = $seedRuntime.deviceMemory; aboveHost = $memoryOverHostRuntime.deviceMemory }
+       constraint = 'Application host cap and Chromium API bucket are distinct; report the page-observed value, not just the switch.'
+-      status = Get-CheckStatus -Name 'device memory host clamp and Chromium bucket'
++      status = Get-CheckStatus -Name 'raw memory above host is refused'
+       evidence = 'runtime.seed.deviceMemory; runtime.memoryOverHost.deviceMemory'
+     }
+     customProfile = [ordered]@{

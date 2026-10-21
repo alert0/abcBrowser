@@ -24,7 +24,6 @@ import { defaultPlatform, defaultProfileDraft, randomSeed } from '../../shared/d
 import {
   applyHardwareProfile,
   defaultApostateGpuAnchor,
-  effectiveGpuIdentity,
   HARDWARE_PROFILES,
   hardwareProfile,
   hardwareProfileSummary,
@@ -103,8 +102,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const fingerprintGpuAnchor = Form.useWatch(['fingerprint', 'gpuAnchor'], form) ?? 'auto'
   const apostateProfileJson = Form.useWatch(['fingerprint', 'apostateProfileJson'], form) ?? ''
   const customProfileEnabled = apostateProfileJson.trim().length > 0
-  const fingerprintSeed = Form.useWatch(['fingerprint', 'seed'], form) ?? 0
-  const fingerprintGpuBucket = Form.useWatch(['fingerprint', 'gpuBucket'], form)
   const kernelVersion = Form.useWatch('kernelVersion', form) ?? ''
   const windowMode = Form.useWatch(['window', 'mode'], form) ?? 'auto'
   const [testingProxy, setTestingProxy] = useState(false)
@@ -122,11 +119,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       { value: 'auto', label: '自动选择（由种子决定）' },
       { value: 'macos-metal-apple-850a91233555', label: 'macOS · Apple · Metal' }
     ]
-  const selectedGpuIdentity = effectiveGpuIdentity({
-    hardwareProfileId,
-    seed: fingerprintSeed,
-    gpuBucket: fingerprintGpuBucket
-  })
   const hostPlatform = defaultPlatform()
   const timezoneMismatch = Boolean(proxyResult?.timezone && fingerprintTimezone && proxyResult.timezone !== fingerprintTimezone)
   const networkIdentity = effectiveNetworkIdentity({
@@ -468,7 +460,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           type="warning"
           showIcon
           message="Apostate 自定义 Profile v3 已启用"
-          description="自定义 profile 会替代种子组合；JSON 中未填写的字段继承宿主值。下方硬件模板、种子、GPU、内存、语言和时区字段不会传给内核。请用网页运行时检查核验，explain 报告不适用于此模式。"
+          description="自定义 profile 明确优先于 Host/Seed；下方硬件模板、种子、GPU、内存、语言和时区字段不会传给内核。省略字段原则上继承宿主，但本地内核省略语言时实测回退 en-US，请显式填写 locale。请用网页运行时检查核验，explain 报告不适用于此模式。"
         />
       )}
       {selectedHardware?.hostMatched && !customProfileEnabled && (
@@ -511,12 +503,12 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       >
         <Input disabled={customProfileEnabled || selectedHardware?.hostMatched || fingerprintGpuAnchor === 'auto'} placeholder="ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 …)" />
       </Form.Item>
-      {selectedHardware?.renderIdentityMode === 'seeded-curated' && !customProfileEnabled && !selectedGpuIdentity && (
+      {selectedHardware?.renderIdentityMode === 'seeded-curated' && !customProfileEnabled && (
         <Alert
           type="warning"
           showIcon
-          message={t("旧环境保持原有硬件信息")}
-          description={t("如需更换，请点击下方“重新生成”。")}
+          message="GPU 型号由 Apostate catalogue 选择"
+          description="旧版 GPU bucket 不控制 Apostate 型号，也不会改写环境种子；需要精确型号时，请固定 GPU 家族并填写其完整 renderer。"
         />
       )}
       {hardwareProfileId === 'legacy-custom' && !customProfileEnabled && (

@@ -1,0 +1,58 @@
+apostate fingerprint composition
+
+  chromium            155.0.8059.31
+  profile schema      3
+  catalogue           v2 (tables f7520eaac2212793d0ed147a82bf52303e77a8b18b91eb9e900c8e56acf0d117)
+  platform persona    windows
+  host platform       windows
+  host cores          16
+  host memory         42806288384 bytes
+  host backend        d3d11 (the platform default, not probed)
+  window bounds       1000x700
+  seed                42
+  seed source         --fingerprint (pinned by flag, identical on any machine)
+  reproduce with      --fingerprint=42
+  root                1f609a08ef7734f203ced27b8ed93efb5ef2652f3377a878e4ecee1b49fe6ce8
+
+surface                   layer         evidence               value
+anchor                    anchor        physical-ground-truth  windows-d3d11-intel-79dfeb5b4f99
+os_release                dispersion    physical-ground-truth  windows-11
+gpu_identity              dispersion    catalogue-value        d3d11-intel-uhd-graphics-770-4680
+webgpu                    anchor        physical-ground-truth  Intel(R) UHD Graphics 770
+machine_class             dispersion    catalogue-value        win-sff-desktop
+cpu                       dispersion    public-corpus          cores-12
+memory                    dispersion    catalogue-value        gib-8
+panel                     dispersion    public-corpus          fhd-1080p
+furniture                 dispersion    physical-ground-truth  taskbar-bottom
+font_packs/platform-core  dispersion    catalogue-value        core
+media_topology            dispersion    catalogue-value        desktop-speakers-only
+audio                     dispersion    physical-ground-truth  wasapi-shared-480
+network                   dispersion    catalogue-value        4g-fast
+battery                   dispersion    catalogue-value        absent
+locale.application        command-line  operator               en-GB
+  ! the application locale this launch presents, on every platform. l10n_util resolves it ahead of every platform candidate -- ahead of glib's LANGUAGE/LC_*/LANG on linux, of NSBundle's preferredLocalizations on macOS, and of both --lang and the Windows preferred-UI-language list on windows -- and LANGUAGE, LC_ALL, LC_MESSAGES and LANG are written to it in the browser before the first child is forked, so the C library agrees with ICU and every process agrees with the browser. It decides Intl.DateTimeFormat, NumberFormat and Collator, the calendar and hour cycle they report, the default Accept-Language list, collation order, and Blink's locale-dependent font fallback -- and the rendered width of a <input type=date>, which is how a page reads it with no Intl call at all; named by --fingerprint-locale
+locale.accept_languages   command-line  operator               en-GB,en
+  ! locale.accept_languages was set from the command line: either named by the operator or resolved by the launcher's prelaunch GeoIP lookup of the effective egress. Neither the seed nor the catalogue reaches this surface
+locale.timezone           command-line  operator               Europe/London
+  ! locale.timezone was set from the command line: either named by the operator or resolved by the launcher's prelaunch GeoIP lookup of the effective egress. Neither the seed nor the catalogue reaches this surface
+voices                    dispersion    physical-ground-truth  windows-en-gb
+extensions                dispersion    physical-ground-truth  absent
+theme                     dispersion    catalogue-value        dark
+cpu                       command-line  operator               2
+  ! cpu.logical_cores was set from the command line rather than drawn from the catalogue, so its real-world prevalence is unknown and it may be more distinctive than a drawn value; the seed had chosen 12
+memory                    command-line  operator               2147483648 bytes
+  ! memory.total_bytes was set from the command line rather than drawn from the catalogue, so its real-world prevalence is unknown and it may be more distinctive than a drawn value; the seed had chosen 8589934592 bytes
+screen.width              command-line  operator               1280
+  ! screen.width was set from the command line rather than drawn from the catalogue, so its real-world prevalence is unknown and it may be more distinctive than a drawn value; the seed had chosen 1920
+screen.height             command-line  operator               900
+  ! screen.height was set from the command line rather than drawn from the catalogue, so its real-world prevalence is unknown and it may be more distinctive than a drawn value; the seed had chosen 1080
+
+limitations
+  - the host graphics backend was inferred to be d3d11 (the platform default) because the GPU process does not exist yet at composition time; pass --use-angle to state it
+  - anchor windows-d3d11-intel-79dfeb5b4f99 serves 44 numeric GL capability limits, composed rather than this host's, to every WebGL context on every backend; the backend underneath may still clamp or refuse an operation taken to one of them, and docs/KNOWN_GAPS.md says which
+  - locale.accept_languages: locale.accept_languages was set from the command line: either named by the operator or resolved by the launcher's prelaunch GeoIP lookup of the effective egress. Neither the seed nor the catalogue reaches this surface
+  - locale.timezone: locale.timezone was set from the command line: either named by the operator or resolved by the launcher's prelaunch GeoIP lookup of the effective egress. Neither the seed nor the catalogue reaches this surface
+  - cpu: cpu.logical_cores was set from the command line rather than drawn from the catalogue, so its real-world prevalence is unknown and it may be more distinctive than a drawn value; the seed had chosen 12
+  - memory: memory.total_bytes was set from the command line rather than drawn from the catalogue, so its real-world prevalence is unknown and it may be more distinctive than a drawn value; the seed had chosen 8589934592 bytes
+  - screen.width: screen.width was set from the command line rather than drawn from the catalogue, so its real-world prevalence is unknown and it may be more distinctive than a drawn value; the seed had chosen 1920
+  - screen.height: screen.height was set from the command line rather than drawn from the catalogue, so its real-world prevalence is unknown and it may be more distinctive than a drawn value; the seed had chosen 1080

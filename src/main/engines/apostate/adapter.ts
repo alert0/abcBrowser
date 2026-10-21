@@ -1,5 +1,6 @@
 import type { BrowserProfile } from '../../../shared/types'
-import { effectiveFingerprintSeed, hardwareProfile } from '../../../shared/hardware-profiles'
+import { hardwareProfile } from '../../../shared/hardware-profiles'
+import { hostHardwareSnapshot } from '../../host-hardware'
 import { effectiveNetworkIdentity } from '../../../shared/network-identity'
 import { validateApostateProfileJson } from '../../../shared/apostate-profile-validation'
 import {
@@ -18,10 +19,17 @@ export function profileWindowName(profile: Pick<BrowserProfile, 'serialNumber' |
   return `[${profile.serialNumber}] ${name}`
 }
 
-function assertSafeLocale(value: string): string {
+function assertSafeLocale(value: string, language: string): string {
   const normalized = value.trim()
-  if (!normalized || /[\r\n]/.test(normalized)) throw new Error('Apostate 语言列表无效')
-  return normalized
+  try {
+    const tags = normalized.split(',').map(tag => Intl.getCanonicalLocales(tag.trim())[0])
+    if (!tags.length || tags.some(tag => !tag) || tags[0] !== Intl.getCanonicalLocales(language.trim())[0]) {
+      throw new Error('conflicting primary locale')
+    }
+    return tags.join(',')
+  } catch {
+    throw new Error('Apostate 语言列表必须由语言标签组成，首项必须与界面语言一致')
+  }
 }
 
 export function assertApostateCompatible(profile: BrowserProfile): void {
@@ -36,8 +44,27 @@ export function assertApostateCompatible(profile: BrowserProfile): void {
   if (!authoredProfileJson && fp.disabledSpoofing.length && !hostMode) {
     throw new Error('Apostate 不支持 Prism 的“关闭部分伪装”配置，请清空该配置后再启动')
   }
-  if (!authoredProfileJson && !hostMode && fp.webrtcPolicy === 'public_only') {
+  if (fp.webrtcPolicy === 'public_only') {
     throw new Error('Apostate 尚未验证 public_only WebRTC 语义，请改用“代理 UDP”或“内核默认”')
+  }
+  if (!authoredProfileJson && !hostMode) {
+    if (!Number.isInteger(fp.seed) || fp.seed < 1 || fp.seed > 0xffffffff) {
+      throw new Error('Apostate Seed 模式种子必须是 1–4294967295；0 表示主机模式')
+    }
+    if (!['windows', 'macos'].includes(fp.platform)) throw new Error('Apostate 平台配置无效')
+    for (const [name, value, maximum] of [
+      ['CPU', fp.hardwareConcurrency, 4096], ['屏幕宽度', fp.screenWidth, 65535],
+      ['屏幕高度', fp.screenHeight, 65535], ['设备内存', fp.deviceMemoryGb ?? hardware?.physicalMemoryGb ?? 8, 4096]
+    ] as const) {
+      if (!Number.isInteger(value) || value < 1 || value > maximum) throw new Error(`Apostate ${name}必须是 1–${maximum} 的整数`)
+    }
+    const anchor = apostateAnchorForHardwareProfile(hardware, fp.gpuAnchor)
+    const knownAnchors = ['windows-d3d11-intel-79dfeb5b4f99', 'windows-d3d11-nvidia-0947761dfbe9',
+      'windows-d3d11-qualcomm-6388f9914f3f', 'macos-metal-apple-850a91233555']
+    if ((anchor && (!knownAnchors.includes(anchor) || !anchor.startsWith(`${fp.platform}-`)))
+      || (fp.gpuRenderer?.trim() && !anchor)) {
+      throw new Error('Apostate GPU renderer 必须配合与平台一致的固定 GPU 家族')
+    }
   }
 }
 
@@ -47,6 +74,12 @@ export function buildApostateLaunchArgs(profile: BrowserProfile, options: Aposta
   const hardware = hardwareProfile(fp.hardwareProfileId)
   const authoredProfileJson = validateApostateProfileJson(fp.apostateProfileJson ?? '')
   const hostMode = !authoredProfileJson && hardware?.hostMatched === true
+  const actualHost = hostHardwareSnapshot()
+  const hostCores = Math.min(actualHost.hardwareConcurrency, options.hostHardwareConcurrency ?? actualHost.hardwareConcurrency)
+  const hostMemoryGb = Math.min(actualHost.physicalMemoryGb, options.hostMemoryGb ?? actualHost.physicalMemoryGb)
+  if (!Number.isInteger(hostCores) || hostCores < 1 || !Number.isFinite(hostMemoryGb) || hostMemoryGb < 1) {
+    throw new Error('Apostate 宿主 CPU 或内存限制无效')
+  }
   const args = [`--user-data-dir=${options.userDataDir}`]
 
   if (authoredProfileJson) {
@@ -54,15 +87,13 @@ export function buildApostateLaunchArgs(profile: BrowserProfile, options: Aposta
       cpu?: { logical_cores?: number }
       memory?: { total_bytes?: number }
     }
-    if (Number.isInteger(options.hostHardwareConcurrency) && (options.hostHardwareConcurrency ?? 0) > 0
-      && typeof authoredProfile.cpu?.logical_cores === 'number') {
-      authoredProfile.cpu.logical_cores = Math.min(authoredProfile.cpu.logical_cores, options.hostHardwareConcurrency!)
+    if (typeof authoredProfile.cpu?.logical_cores === 'number') {
+      authoredProfile.cpu.logical_cores = Math.min(authoredProfile.cpu.logical_cores, hostCores)
     }
-    if (Number.isFinite(options.hostMemoryGb) && (options.hostMemoryGb ?? 0) > 0
-      && typeof authoredProfile.memory?.total_bytes === 'number') {
+    if (typeof authoredProfile.memory?.total_bytes === 'number') {
       authoredProfile.memory.total_bytes = Math.min(
         authoredProfile.memory.total_bytes,
-        Math.floor(options.hostMemoryGb! * (1024 ** 3))
+        Math.floor(hostMemoryGb * (1024 ** 3))
       )
     }
     const effectiveProfileJson = JSON.stringify(authoredProfile)
@@ -71,29 +102,26 @@ export function buildApostateLaunchArgs(profile: BrowserProfile, options: Aposta
     // Apostate host mode composes nothing. Do not send per-field overrides.
     args.push('--fingerprint=host')
   } else {
-    const hardwareConcurrency = options.hostHardwareConcurrency
-      ? Math.min(fp.hardwareConcurrency, options.hostHardwareConcurrency)
-      : fp.hardwareConcurrency
+    const hardwareConcurrency = Math.min(fp.hardwareConcurrency, hostCores)
     const networkIdentity = effectiveNetworkIdentity(fp, options.proxyIdentity, {
       allowGeoConflict: options.allowGeoConflict
     })
-    const locale = assertSafeLocale(networkIdentity.acceptLanguages || fp.acceptLanguages || networkIdentity.language || fp.language)
+    const locale = assertSafeLocale(networkIdentity.acceptLanguages || fp.acceptLanguages || networkIdentity.language || fp.language, networkIdentity.language)
+    try { new Intl.DateTimeFormat('en', { timeZone: networkIdentity.timezone }).format() }
+    catch { throw new Error('Apostate 时区必须是有效 IANA 时区') }
     args.push(
-      `--fingerprint=${effectiveFingerprintSeed(fp)}`,
+      `--fingerprint=${fp.seed}`,
       `--fingerprint-platform=${fp.platform}`,
       `--fingerprint-hardware-concurrency=${hardwareConcurrency}`,
       `--fingerprint-screen-width=${fp.screenWidth}`,
       `--fingerprint-screen-height=${fp.screenHeight}`,
       `--fingerprint-locale=${locale}`,
-      `--fingerprint-timezone=${networkIdentity.timezone}`,
-      `--lang=${networkIdentity.language}`
+      `--fingerprint-timezone=${networkIdentity.timezone}`
     )
 
     const configuredMemory = fp.deviceMemoryGb ?? hardware?.physicalMemoryGb
     if (configuredMemory !== undefined) {
-      const memoryGb = options.hostMemoryGb && options.hostMemoryGb > 0
-        ? Math.min(configuredMemory, options.hostMemoryGb)
-        : configuredMemory
+      const memoryGb = Math.min(configuredMemory, Math.floor(hostMemoryGb))
       args.push(`--fingerprint-device-memory=${memoryGb}`)
     }
 
@@ -116,6 +144,14 @@ export function buildApostateLaunchArgs(profile: BrowserProfile, options: Aposta
     : authoredProfileJson
       ? Math.min(profile.window.height, authoredScreen?.screen?.height ?? profile.window.height)
       : hostMode ? profile.window.height : fp.screenHeight
+  if (![windowWidth, windowHeight].every(value => Number.isInteger(value) && value > 0)) {
+    throw new Error('Apostate 窗口尺寸必须是正整数')
+  }
+  const screen = authoredScreen?.screen ?? (hostMode ? undefined : { width: fp.screenWidth, height: fp.screenHeight })
+  if ((screen?.width !== undefined && windowWidth > screen.width)
+    || (screen?.height !== undefined && windowHeight > screen.height)) {
+    throw new Error('Apostate 窗口尺寸不能大于声明的屏幕尺寸')
+  }
   args.push(
     `--window-size=${windowWidth},${windowHeight}`,
     `--window-name=${profileWindowName(profile)}`,

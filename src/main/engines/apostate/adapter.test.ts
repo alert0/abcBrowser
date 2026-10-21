@@ -1,7 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { defaultProfileDraft } from '../../../shared/defaults'
 import type { BrowserProfile } from '../../../shared/types'
 import { buildApostateLaunchArgs } from './adapter'
+
+vi.mock('../../host-hardware', () => ({ hostHardwareSnapshot: () => ({
+  platform: 'windows', platformVersion: '10.0.0', hardwareConcurrency: 16, physicalMemoryGb: 64
+}) }))
 
 function profile(): BrowserProfile {
   const now = new Date().toISOString()
@@ -138,18 +142,115 @@ describe('Apostate adapter', () => {
       .toEqual({ cpu: { logical_cores: 8 }, memory: { total_bytes: 8589934592 } })
   })
 
-  it('ignores legacy WebRTC policy when host or authored profile mode takes precedence', () => {
+  it('rejects unsupported WebRTC policy in host and authored modes too', () => {
     const authored = profile()
     authored.fingerprint.hardwareProfileId = 'legacy-custom'
     authored.fingerprint.apostateProfileJson = JSON.stringify({ cpu: { logical_cores: 8 } })
     authored.fingerprint.webrtcPolicy = 'public_only'
-    expect(() => buildApostateLaunchArgs(authored, { userDataDir: 'C:\\profiles\\authored-webrtc' })).not.toThrow()
+    expect(() => buildApostateLaunchArgs(authored, { userDataDir: 'C:\\profiles\\authored-webrtc' })).toThrow('public_only')
 
     const host = profile()
     host.fingerprint.hardwareProfileId = process.platform === 'win32' ? 'windows-host' : 'macos-host'
     host.fingerprint.platform = process.platform === 'win32' ? 'windows' : 'macos'
     host.fingerprint.webrtcPolicy = 'public_only'
-    expect(() => buildApostateLaunchArgs(host, { userDataDir: 'C:\\profiles\\host-webrtc' })).not.toThrow()
+    expect(() => buildApostateLaunchArgs(host, { userDataDir: 'C:\\profiles\\host-webrtc' })).toThrow('public_only')
+  })
+
+  it.each(['host', 'seed', 'custom'] as const)('keeps %s mode exclusive with either supported WebRTC policy', (mode) => {
+    for (const policy of ['default', 'proxy_only'] as const) {
+      const next = profile()
+      next.fingerprint.hardwareProfileId = mode === 'host'
+        ? (process.platform === 'win32' ? 'windows-host' : 'macos-host') : 'legacy-custom'
+      next.fingerprint.apostateProfileJson = mode === 'custom' ? '{"cpu":{"logical_cores":2}}' : ''
+      next.fingerprint.webrtcPolicy = policy
+      const args = buildApostateLaunchArgs(next, { userDataDir: 'test' })
+      expect(args.filter(a => a.startsWith('--fingerprint=') || a.startsWith('--apostate-profile='))).toHaveLength(1)
+      expect(args.includes('--fingerprint=host')).toBe(mode === 'host')
+      expect(args.some(a => a.startsWith('--apostate-profile='))).toBe(mode === 'custom')
+      expect(args.includes('--fingerprint-webrtc-udp=block')).toBe(policy === 'proxy_only')
+    }
+  })
+
+  it.each([1, 42, 0xffffffff])('passes seed %s unchanged despite legacy GPU buckets', seed => {
+    const next = profile()
+    next.fingerprint.seed = seed
+    next.fingerprint.hardwareProfileId = 'windows-11-rtx4060'
+    next.fingerprint.gpuBucket = 29
+    expect(buildApostateLaunchArgs(next, { userDataDir: 'test' })).toContain(`--fingerprint=${seed}`)
+  })
+
+  it('rejects seed zero because Apostate interprets it as host mode', () => {
+    const next = profile()
+    next.fingerprint.seed = 0
+    expect(() => buildApostateLaunchArgs(next, { userDataDir: 'test' })).toThrow('种子')
+  })
+
+  it('floors fractional host memory before emitting the integer GiB switch', () => {
+    const next = profile()
+    next.fingerprint.hardwareProfileId = 'legacy-custom'
+    next.fingerprint.deviceMemoryGb = 16
+    expect(buildApostateLaunchArgs(next, { userDataDir: 'test', hostMemoryGb: 7.8 }))
+      .toContain('--fingerprint-device-memory=7')
+  })
+
+  it('rejects a window larger than its claimed screen', () => {
+    for (const custom of [false, true]) {
+      const next = profile()
+      next.fingerprint.hardwareProfileId = 'legacy-custom'
+      next.fingerprint.screenWidth = 1024
+      next.fingerprint.screenHeight = 768
+      next.fingerprint.apostateProfileJson = custom ? '{"screen":{"width":1024,"height":768}}' : ''
+      next.window = { mode: 'custom', width: 1200, height: 800, x: 0, y: 0 }
+      expect(() => buildApostateLaunchArgs(next, { userDataDir: 'test' })).toThrow('窗口')
+    }
+  })
+
+  it('rejects an invalid or conflicting locale rather than silently changing navigator.language', () => {
+    const next = profile()
+    next.fingerprint.hardwareProfileId = 'legacy-custom'
+    next.fingerprint.networkIdentityMode = 'manual'
+    next.fingerprint.language = 'fr-FR'
+    next.fingerprint.acceptLanguages = 'en-US,en'
+    expect(() => buildApostateLaunchArgs(next, { userDataDir: 'test' })).toThrow('语言')
+    next.fingerprint.language = 'en-US'
+    next.fingerprint.acceptLanguages = 'en-US;q=0.9,en'
+    expect(() => buildApostateLaunchArgs(next, { userDataDir: 'test' })).toThrow('语言')
+  })
+
+  it('validates GPU family at the launch boundary as well as on save', () => {
+    const next = profile()
+    next.fingerprint.hardwareProfileId = 'legacy-custom'
+    next.fingerprint.gpuAnchor = 'auto'
+    next.fingerprint.gpuRenderer = 'unmatched renderer'
+    expect(() => buildApostateLaunchArgs(next, { userDataDir: 'test' })).toThrow('GPU')
+  })
+
+  it.each([0, -1, 1.5, NaN, Infinity, 4097])('rejects invalid CPU or memory %s before spawning', value => {
+    for (const field of ['hardwareConcurrency', 'deviceMemoryGb'] as const) {
+      const next = profile()
+      next.fingerprint.hardwareProfileId = 'legacy-custom'
+      next.fingerprint[field] = value
+      expect(() => buildApostateLaunchArgs(next, { userDataDir: 'test' })).toThrow('整数')
+    }
+  })
+
+  it('lets an authored device explicitly take precedence over a host template and seed zero', () => {
+    const next = profile()
+    next.fingerprint.hardwareProfileId = process.platform === 'win32' ? 'windows-host' : 'macos-host'
+    next.fingerprint.seed = 0
+    next.fingerprint.apostateProfileJson = '{"cpu":{"logical_cores":2}}'
+    const args = buildApostateLaunchArgs(next, { userDataDir: 'test' })
+    expect(args.some(a => a.startsWith('--apostate-profile='))).toBe(true)
+    expect(args.some(a => a.startsWith('--fingerprint='))).toBe(false)
+    expect(JSON.parse(next.fingerprint.apostateProfileJson)).toEqual({ cpu: { logical_cores: 2 } })
+  })
+
+  it.each([1, 8, 16, 32])('limits configured CPU %s without exceeding host limits', cores => {
+    const next = profile()
+    next.fingerprint.hardwareProfileId = 'legacy-custom'
+    next.fingerprint.hardwareConcurrency = cores
+    expect(buildApostateLaunchArgs(next, { userDataDir: 'test', hostHardwareConcurrency: 8 }))
+      .toContain(`--fingerprint-hardware-concurrency=${Math.min(cores, 8)}`)
   })
 
   it('does not silently translate public_only WebRTC semantics', () => {

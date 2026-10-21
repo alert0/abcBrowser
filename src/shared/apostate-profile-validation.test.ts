@@ -52,4 +52,16 @@ describe('Apostate v3 profile schema validation', () => {
   it('rejects oversized payloads before parsing or encoding', () => {
     expect(() => validateApostateProfileJson('x'.repeat(13 * 1024))).toThrow('12 KiB')
   })
+
+  it('rejects inherited Object.prototype names as unknown keys', () => {
+    for (const key of ['constructor', '__proto__', 'toString']) {
+      expect(() => validateApostateProfileJson(`{"${key}":{}}`)).toThrow('unexpected property')
+    }
+  })
+
+  it('rejects empty device payloads that could unexpectedly resume seed composition', () => {
+    for (const value of ['{}', '{"cpu":{}}', '{"source_capture":"reference"}']) {
+      expect(() => validateApostateProfileJson(value)).toThrow('有效设备字段')
+    }
+  })
 })

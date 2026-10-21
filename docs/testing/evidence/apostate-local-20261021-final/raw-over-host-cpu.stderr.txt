@@ -1,0 +1,1 @@
+apostate: --fingerprint-hardware-concurrency=20 is above this host's 16 logical cores. A page can measure parallel throughput, so a count the machine cannot deliver is falsifiable in a way a lower count is not. Pass a value of 16 or less.

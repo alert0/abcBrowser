@@ -1,0 +1,1 @@
+apostate: --fingerprint names an off value, so no profile is composed and --fingerprint-hardware-concurrency cannot take effect. Drop one of the two: --fingerprint=off for this machine's real fingerprint, or a seed for a composed one. --fingerprint-explain still works with either.

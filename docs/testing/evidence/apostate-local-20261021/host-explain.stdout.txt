@@ -1,0 +1,11 @@
+apostate fingerprint composition
+
+  composition         disabled
+  seed source         none: the host is inherited
+
+Every surface is the host's own value, which is what --fingerprint=host
+asks for. No layer below it is active, so there is nothing to report per
+surface: the profile is the host.
+
+limitations
+  none

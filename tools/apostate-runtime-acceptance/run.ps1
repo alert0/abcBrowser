@@ -581,20 +581,8 @@ try {
 
   $conflictingProfileJson = ConvertTo-Json -InputObject @{ cpu = @{ logical_cores = 2 } } -Compress
   $conflictingProfileBase64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($conflictingProfileJson))
-  $customProfileConflict = Invoke-Apostate -Label 'custom-profile-conflict' -Arguments @(
-    "--user-data-dir=$(Join-Path $script:workRoot 'custom-profile-conflict-profile')",
-    "--apostate-profile=$conflictingProfileBase64",
-    '--fingerprint=42',
-    '--fingerprint-platform=windows',
-    '--fingerprint-anchor=windows-d3d11-intel-79dfeb5b4f99',
-    '--fingerprint-noise',
-    '--fingerprint-explain'
-  )
-  if ($customProfileConflict.ExitCode -eq 0) {
-    Add-Check -Name 'custom profile rejects Seed and per-field overrides' -Status 'FAIL' -Details 'Apostate accepted a custom profile together with a seed/platform/GPU/noise override set.'
-  } else {
-    Add-Check -Name 'custom profile rejects Seed and per-field overrides' -Status 'PASS' -Details "Rejected conflicting mode flags with exit code $($customProfileConflict.ExitCode)."
-  }
+  # Authored device profiles take precedence and log ignored switches. Explain
+  # need not exit in this mode; test precedence through the API probe below.
 
   $pagePath = $script:probePagePath
   $html = @'
@@ -630,6 +618,12 @@ try {
     if (context) {
       context.fillStyle = "#0f766e";
       context.fillRect(0, 0, 16, 16);
+      context.fillStyle = "#e57321";
+      context.beginPath();
+      context.moveTo(0.3, 0.7);
+      context.lineTo(15.2, 8.4);
+      context.lineTo(2.6, 15.1);
+      context.fill();
       canvasReadback = {
         dataUrl: canvas.toDataURL(),
         pixelSample: Array.from(context.getImageData(0, 0, 4, 2).data)
@@ -840,12 +834,13 @@ try {
   ) + $commonArgs + @($pageUri))
   Assert-Equal -Name 'CPU request equal to host' -Actual $cpuEqualRuntime.hardwareConcurrency -Expected $script:hostLogicalProcessors
 
-  $cpuOverHostRuntime = Read-RuntimeFromDom -Label 'cpu-over-host-runtime' -Arguments (@(
+  $cpuOverHostResult = Invoke-Apostate -Label 'cpu-over-host-runtime' -Arguments @(
     "--user-data-dir=$(Join-Path $script:workRoot 'cpu-over-host-profile')",
     '--fingerprint=42',
-    "--fingerprint-hardware-concurrency=$($script:hostLogicalProcessors + 4)"
-  ) + $commonArgs + @($pageUri))
-  Assert-Equal -Name 'CPU request above host is clamped' -Actual $cpuOverHostRuntime.hardwareConcurrency -Expected $script:hostLogicalProcessors
+    "--fingerprint-hardware-concurrency=$($script:hostLogicalProcessors + 4)",
+    '--fingerprint-explain'
+  )
+  Assert-Equal -Name 'raw CPU above host is refused' -Actual $cpuOverHostResult.ExitCode -Expected 1
 
   $invalidCpu = Invoke-Apostate -Label 'cpu-invalid-zero' -Arguments @(
     "--user-data-dir=$(Join-Path $script:workRoot 'cpu-invalid-profile')",
@@ -860,19 +855,13 @@ try {
   }
 
   $memoryRequestGb = [Math]::Ceiling($script:hostPhysicalMemoryBytes / 1GB) + 8
-  $memoryOverHostRuntime = Read-RuntimeFromDom -Label 'memory-over-host-runtime' -Arguments (@(
+  $memoryOverHostResult = Invoke-Apostate -Label 'memory-over-host-runtime' -Arguments @(
     "--user-data-dir=$(Join-Path $script:workRoot 'memory-over-host-profile')",
     '--fingerprint=42',
-    "--fingerprint-device-memory=$memoryRequestGb"
-  ) + $commonArgs + @($pageUri))
-  $memoryBuckets = @(0.25, 0.5, 1, 2, 4, 8)
-  $memoryIsKnownBucket = $memoryBuckets -contains [double]$memoryOverHostRuntime.deviceMemory
-  $memoryIsWithinHost = [double]$memoryOverHostRuntime.deviceMemory -le ($script:hostPhysicalMemoryBytes / 1GB)
-  if ($memoryIsKnownBucket -and $memoryIsWithinHost) {
-    Add-Check -Name 'device memory host clamp and Chromium bucket' -Status 'PASS' -Details "Requested $memoryRequestGb GiB; page observed $($memoryOverHostRuntime.deviceMemory) GiB from Chromium's exposed bucket."
-  } else {
-    Add-Check -Name 'device memory host clamp and Chromium bucket' -Status 'FAIL' -Details "Requested $memoryRequestGb GiB against $([Math]::Floor($script:hostPhysicalMemoryBytes / 1GB)) GiB physical RAM; page observed [$($memoryOverHostRuntime.deviceMemory)]."
-  }
+    "--fingerprint-device-memory=$memoryRequestGb",
+    '--fingerprint-explain'
+  )
+  Assert-Equal -Name 'raw memory above host is refused' -Actual $memoryOverHostResult.ExitCode -Expected 1
 
   $acceptLanguageHeader = [string]$seedRuntime.httpRequestHeaders.acceptLanguage
   if ($acceptLanguageHeader -match '^en-GB(?:,|$)') {
@@ -988,6 +977,15 @@ try {
     "--apostate-profile=$partialProfileBase64"
   ) + $commonArgs + @($pageUri))
   Assert-Equal -Name 'partial profile explicit CPU' -Actual $partialProfileRuntime.hardwareConcurrency -Expected 2
+  $customProfileConflict = Read-RuntimeFromDom -Label 'custom-profile-conflict' -Arguments (@(
+    "--user-data-dir=$(Join-Path $script:workRoot 'custom-profile-conflict-profile')",
+    "--apostate-profile=$conflictingProfileBase64",
+    '--fingerprint=42',
+    '--fingerprint-platform=macos',
+    '--fingerprint-hardware-concurrency=1'
+  ) + $commonArgs + @($pageUri))
+  Assert-Equal -Name 'custom profile takes precedence over seed CPU' -Actual $customProfileConflict.hardwareConcurrency -Expected 2
+  Assert-Equal -Name 'custom profile ignores seed platform' -Actual $customProfileConflict.platform -Expected $hostRuntime.platform
   Assert-Equal -Name 'partial profile inherits host memory' -Actual $partialProfileRuntime.deviceMemory -Expected $hostRuntime.deviceMemory
   Assert-Equal -Name 'partial profile inherits host platform' -Actual $partialProfileRuntime.platform -Expected $hostRuntime.platform
   Assert-Equal -Name 'partial profile inherits host User-Agent' -Actual $partialProfileRuntime.userAgent -Expected $hostRuntime.userAgent
@@ -1048,15 +1046,15 @@ try {
     cpu = [ordered]@{
       requestedValue = [ordered]@{ belowHost = 2; equalHost = $script:hostLogicalProcessors; aboveHost = if ($null -ne $script:hostLogicalProcessors) { $script:hostLogicalProcessors + 4 } else { $null } }
       effectiveValue = [ordered]@{ belowHost = $seedRuntime.hardwareConcurrency; equalHost = $cpuEqualRuntime.hardwareConcurrency; aboveHost = $cpuOverHostRuntime.hardwareConcurrency }
-      constraint = 'Values above host logical processors must be clamped; zero is rejected; same-seed API outputs are compared across launches.'
-      status = Get-CheckStatus -Name 'CPU request above host is clamped'
+      constraint = 'Raw switches above host logical processors are refused; application clamp is tested separately by local.mjs; zero is rejected.'
+      status = Get-CheckStatus -Name 'raw CPU above host is refused'
       evidence = 'runtime.seed, runtime.cpuEqualHost, runtime.cpuOverHost, seed-determinism.json'
     }
     deviceMemory = [ordered]@{
       requestedValue = [ordered]@{ configured = 2; aboveHost = if ($null -ne $script:hostPhysicalMemoryBytes) { [Math]::Ceiling($script:hostPhysicalMemoryBytes / 1GB) + 8 } else { $null } }
       effectiveValue = [ordered]@{ configured = $seedRuntime.deviceMemory; aboveHost = $memoryOverHostRuntime.deviceMemory }
       constraint = 'Application host cap and Chromium API bucket are distinct; report the page-observed value, not just the switch.'
-      status = Get-CheckStatus -Name 'device memory host clamp and Chromium bucket'
+      status = Get-CheckStatus -Name 'raw memory above host is refused'
       evidence = 'runtime.seed.deviceMemory; runtime.memoryOverHost.deviceMemory'
     }
     customProfile = [ordered]@{

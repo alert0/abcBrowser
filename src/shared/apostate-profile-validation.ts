@@ -124,7 +124,7 @@ function validateNode(value: unknown, schema: JsonSchema, path: string, issues: 
     const properties = schema.properties ?? {}
     for (const [key, childValue] of Object.entries(value)) {
       if (schema.propertyNames) validateNode(key, schema.propertyNames, `${path} property name`, issues, depth + 1)
-      const childSchema = properties[key]
+      const childSchema = Object.prototype.hasOwnProperty.call(properties, key) ? properties[key] : undefined
       if (childSchema) {
         validateNode(childValue, childSchema, `${path}.${key}`, issues, depth + 1)
       } else if (schema.additionalProperties === false) {
@@ -159,6 +159,12 @@ export function validateApostateProfileJson(input: string): string {
   validateNode(value, PROFILE_SCHEMA, '$', issues)
   if (issues.length) {
     throw new Error(`Apostate Profile v3 校验失败：${issues.slice(0, 6).join('；')}`)
+  }
+  // Empty objects (or provenance alone) are not a device profile to the native
+  // loader. Refuse them instead of accidentally falling through to composition.
+  if (isObject(value) && !Object.entries(value).some(([key, section]) =>
+    key !== 'id' && key !== 'source_capture' && isObject(section) && Object.keys(section).length > 0)) {
+    throw new Error('Apostate Profile 必须包含有效设备字段，不能只提供空对象或元数据')
   }
   return JSON.stringify(value)
 }

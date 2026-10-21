@@ -21,7 +21,7 @@ export function hostHardwareSnapshot(): HostHardwareSnapshot {
   return {
     platform,
     platformVersion: hostPlatformVersion(platform, release()),
-    hardwareConcurrency: Math.max(2, Math.min(64, availableParallelism())),
-    physicalMemoryGb: Math.max(1, Math.floor(totalmem() / (1024 ** 3)))
+    hardwareConcurrency: Math.max(1, availableParallelism()),
+    physicalMemoryGb: totalmem() / (1024 ** 3)
   }
 }

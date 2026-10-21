@@ -1,0 +1,237 @@
+{
+  "startedAt": "2026-10-21T08:33:42.598Z",
+  "sourceCommit": "a9dfaeb29e0bff4f8a520e214e8ffcfdbb8eadf9",
+  "dirtyPaths": " M src/main/engines/apostate/adapter.test.ts\n M src/main/engines/apostate/adapter.ts\n M src/main/engines/apostate/capabilities.ts\n M src/main/host-hardware.ts\n M src/shared/apostate-profile-validation.test.ts\n M src/shared/apostate-profile-validation.ts\n?? docs/testing/evidence/\n?? tools/apostate-runtime-acceptance/local.mjs\n",
+  "environment": {
+    "platform": "win32",
+    "release": "10.0.26300",
+    "arch": "x64",
+    "cpus": 16,
+    "cpuModel": "AMD Ryzen 7 5800 8-Core Processor              ",
+    "totalMemoryBytes": 42806288384,
+    "host": {
+      "platform": "windows",
+      "platformVersion": "10.0.0",
+      "hardwareConcurrency": 16,
+      "physicalMemoryGb": 39.86646270751953
+    },
+    "executable": "C:\\Users\\y\\AppData\\Roaming\\abc-browser\\vault\\kernels\\155.0.8059.31\\browser\\chrome.exe",
+    "executableSha256": "9943a6252e1f540e879805209d844a4110fa7edc476dc50091fdf27740f609d1",
+    "headed": true,
+    "node": "v24.14.0"
+  },
+  "checks": [
+    {
+      "name": "Host explain",
+      "status": "PASS",
+      "details": "exit=0; raw stdout/stderr saved"
+    },
+    {
+      "name": "Seed explain",
+      "status": "PASS",
+      "details": "Exact adapter-generated switches; raw stdout/stderr saved"
+    },
+    {
+      "name": "host startup/API",
+      "status": "BLOCKED",
+      "details": "{\"code\":-32000,\"message\":\"Execution context was destroyed.\"}"
+    },
+    {
+      "name": "seed startup/API",
+      "status": "BLOCKED",
+      "details": "{\"code\":-32000,\"message\":\"Execution context was destroyed.\"}"
+    },
+    {
+      "name": "custom startup/API",
+      "status": "BLOCKED",
+      "details": "{\"code\":-32000,\"message\":\"Execution context was destroyed.\"}"
+    },
+    {
+      "name": "partial startup/API",
+      "status": "BLOCKED",
+      "details": "{\"code\":-32000,\"message\":\"Execution context was destroyed.\"}"
+    },
+    {
+      "name": "seed-repeat startup/API",
+      "status": "BLOCKED",
+      "details": "{\"code\":-32000,\"message\":\"Execution context was destroyed.\"}"
+    },
+    {
+      "name": "seed-changed startup/API",
+      "status": "BLOCKED",
+      "details": "{\"code\":-32000,\"message\":\"Execution context was destroyed.\"}"
+    },
+    {
+      "name": "Different seeds API identity",
+      "status": "UNVERIFIED",
+      "details": "A different seed need not change every explicitly pinned API value"
+    },
+    {
+      "name": "seed-noise startup/API",
+      "status": "BLOCKED",
+      "details": "{\"code\":-32000,\"message\":\"Execution context was destroyed.\"}"
+    },
+    {
+      "name": "Canvas edge noise changes readback",
+      "status": "UNVERIFIED",
+      "details": "Edge/text probe compared; solid-color probes are insufficient"
+    },
+    {
+      "name": "adapter-over-host startup/API",
+      "status": "BLOCKED",
+      "details": "{\"code\":-32000,\"message\":\"Execution context was destroyed.\"}"
+    },
+    {
+      "name": "custom-over-host startup/API",
+      "status": "BLOCKED",
+      "details": "{\"code\":-32000,\"message\":\"Execution context was destroyed.\"}"
+    },
+    {
+      "name": "gpu-pinned startup/API",
+      "status": "BLOCKED",
+      "details": "{\"code\":-32000,\"message\":\"Execution context was destroyed.\"}"
+    },
+    {
+      "name": "webrtc-control startup/API",
+      "status": "BLOCKED",
+      "details": "{\"code\":-32000,\"message\":\"Execution context was destroyed.\"}"
+    },
+    {
+      "name": "Controlled loopback STUN blocked",
+      "status": "UNVERIFIED",
+      "details": "control=undefined; block=undefined; no public destination used"
+    },
+    {
+      "name": "Public WebRTC/STUN/TURN leak path",
+      "status": "UNVERIFIED",
+      "details": "No external controlled STUN/TURN or proxy relay test was authorized/provisioned"
+    },
+    {
+      "name": "host-field-conflict",
+      "status": "PASS",
+      "details": "Expected explicit native refusal, exit=1; inspect raw stderr"
+    },
+    {
+      "name": "raw-over-host-cpu",
+      "status": "PASS",
+      "details": "Expected explicit native refusal, exit=1; inspect raw stderr"
+    },
+    {
+      "name": "raw-over-host-memory",
+      "status": "PASS",
+      "details": "Expected explicit native refusal, exit=1; inspect raw stderr"
+    }
+  ],
+  "cases": {
+    "host-explain": {
+      "exitCode": 0,
+      "stdout": "apostate fingerprint composition\r\n\r\n  composition         disabled\r\n  seed source         none: the host is inherited\r\n\r\nEvery surface is the host's own value, which is what --fingerprint=host\r\nasks for. No layer below it is active, so there is nothing to report per\r\nsurface: the profile is the host.\r\n\r\nlimitations\r\n  none\r\n",
+      "stderr": "",
+      "arguments": [
+        "--user-data-dir=<isolated-temporary-profile>",
+        "--fingerprint=host",
+        "--fingerprint-explain"
+      ],
+      "timeout": false
+    },
+    "seed-explain": {
+      "exitCode": 0,
+      "stdout": "apostate fingerprint composition\r\n\r\n  chromium            155.0.8059.31\r\n  profile schema      3\r\n  catalogue           v2 (tables f7520eaac2212793d0ed147a82bf52303e77a8b18b91eb9e900c8e56acf0d117)\r\n  platform persona    windows\r\n  host platform       windows\r\n  host cores          16\r\n  host memory         42806288384 bytes\r\n  host backend        d3d11 (the platform default, not probed)\r\n  window bounds       1000x700\r\n  seed                42\r\n  seed source         --fingerprint (pinned by flag, identical on any machine)\r\n  reproduce with      --fingerprint=42\r\n  root                1f609a08ef7734f203ced27b8ed93efb5ef2652f3377a878e4ecee1b49fe6ce8\r\n\r\nsurface                   layer         evidence               value\r\nanchor                    anchor        physical-ground-truth  windows-d3d11-intel-79dfeb5b4f99\r\nos_release                dispersion    physical-ground-truth  windows-11\r\ngpu_identity              dispersion    catalogue-value        d3d11-intel-uhd-graphics-770-4680\r\nwebgpu                    anchor        physical-ground-truth  Intel(R) UHD Graphics 770\r\nmachine_class             dispersion    catalogue-value        win-sff-desktop\r\ncpu                       dispersion    public-corpus          cores-12\r\nmemory                    dispersion    catalogue-value        gib-8\r\npanel                     dispersion    public-corpus          fhd-1080p\r\nfurniture                 dispersion    physical-ground-truth  taskbar-bottom\r\nfont_packs/platform-core  dispersion    catalogue-value        core\r\nmedia_topology            dispersion    catalogue-value        desktop-speakers-only\r\naudio                     dispersion    physical-ground-truth  wasapi-shared-480\r\nnetwork                   dispersion    catalogue-value        4g-fast\r\nbattery                   dispersion    catalogue-value        absent\r\nlocale.application        command-line  operator               en-GB\r\n  ! the application locale this launch presents, on every platform. l10n_util resolves it ahead of every platform candidate -- ahead of glib's LANGUAGE/LC_*/LANG on linux, of NSBundle's preferredLocalizations on macOS, and of both --lang and the Windows preferred-UI-language list on windows -- and LANGUAGE, LC_ALL, LC_MESSAGES and LANG are written to it in the browser before the first child is forked, so the C library agrees with ICU and every process agrees with the browser. It decides Intl.DateTimeFormat, NumberFormat and Collator, the calendar and hour cycle they report, the default Accept-Language list, collation order, and Blink's locale-dependent font fallback -- and the rendered width of a <input type=date>, which is how a page reads it with no Intl call at all; named by --fingerprint-locale\r\nlocale.accept_languages   command-line  operator               en-GB,en\r\n  ! locale.accept_languages was set from the command line: either named by the operator or resolved by the launcher's prelaunch GeoIP lookup of the effective egress. Neither the seed nor the catalogue reaches this surface\r\nlocale.timezone           command-line  operator               Europe/London\r\n  ! locale.timezone was set from the command line: either named by the operator or resolved by the launcher's prelaunch GeoIP lookup of the effective egress. Neither the seed nor the catalogue reaches this surface\r\nvoices                    dispersion    physical-ground-truth  windows-en-gb\r\nextensions                dispersion    physical-ground-truth  absent\r\ntheme                     dispersion    catalogue-value        dark\r\ncpu                       command-line  operator               2\r\n  ! cpu.logical_cores was set from the command line rather than drawn from the catalogue, so its real-world prevalence is unknown and it may be more distinctive than a drawn value; the seed had chosen 12\r\nmemory                    command-line  operator               2147483648 bytes\r\n  ! memory.total_bytes was set from the command line rather than drawn from the catalogue, so its real-world prevalence is unknown and it may be more distinctive than a drawn value; the seed had chosen 8589934592 bytes\r\nscreen.width              command-line  operator               1280\r\n  ! screen.width was set from the command line rather than drawn from the catalogue, so its real-world prevalence is unknown and it may be more distinctive than a drawn value; the seed had chosen 1920\r\nscreen.height             command-line  operator               900\r\n  ! screen.height was set from the command line rather than drawn from the catalogue, so its real-world prevalence is unknown and it may be more distinctive than a drawn value; the seed had chosen 1080\r\n\r\nlimitations\r\n  - the host graphics backend was inferred to be d3d11 (the platform default) because the GPU process does not exist yet at composition time; pass --use-angle to state it\r\n  - anchor windows-d3d11-intel-79dfeb5b4f99 serves 44 numeric GL capability limits, composed rather than this host's, to every WebGL context on every backend; the backend underneath may still clamp or refuse an operation taken to one of them, and docs/KNOWN_GAPS.md says which\r\n  - locale.accept_languages: locale.accept_languages was set from the command line: either named by the operator or resolved by the launcher's prelaunch GeoIP lookup of the effective egress. Neither the seed nor the catalogue reaches this surface\r\n  - locale.timezone: locale.timezone was set from the command line: either named by the operator or resolved by the launcher's prelaunch GeoIP lookup of the effective egress. Neither the seed nor the catalogue reaches this surface\r\n  - cpu: cpu.logical_cores was set from the command line rather than drawn from the catalogue, so its real-world prevalence is unknown and it may be more distinctive than a drawn value; the seed had chosen 12\r\n  - memory: memory.total_bytes was set from the command line rather than drawn from the catalogue, so its real-world prevalence is unknown and it may be more distinctive than a drawn value; the seed had chosen 8589934592 bytes\r\n  - screen.width: screen.width was set from the command line rather than drawn from the catalogue, so its real-world prevalence is unknown and it may be more distinctive than a drawn value; the seed had chosen 1920\r\n  - screen.height: screen.height was set from the command line rather than drawn from the catalogue, so its real-world prevalence is unknown and it may be more distinctive than a drawn value; the seed had chosen 1080\r\n",
+      "stderr": "",
+      "arguments": [
+        "--user-data-dir=<isolated-temporary-profile>",
+        "--fingerprint=42",
+        "--fingerprint-platform=windows",
+        "--fingerprint-hardware-concurrency=2",
+        "--fingerprint-screen-width=1280",
+        "--fingerprint-screen-height=900",
+        "--fingerprint-locale=en-GB,en",
+        "--fingerprint-timezone=Europe/London",
+        "--fingerprint-device-memory=2",
+        "--window-size=1000,700",
+        "--window-name=[1] acceptance-seed",
+        "--abc-profile-serial=1",
+        "--abc-profile-id=acceptance",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-background-mode",
+        "--disable-background-networking",
+        "--disable-component-update",
+        "--window-position=0,0",
+        "--fingerprint-webrtc-udp=block",
+        "--fingerprint-explain"
+      ],
+      "timeout": false
+    },
+    "host": {
+      "error": "{\"code\":-32000,\"message\":\"Execution context was destroyed.\"}"
+    },
+    "seed": {
+      "error": "{\"code\":-32000,\"message\":\"Execution context was destroyed.\"}"
+    },
+    "custom": {
+      "error": "{\"code\":-32000,\"message\":\"Execution context was destroyed.\"}"
+    },
+    "partial": {
+      "error": "{\"code\":-32000,\"message\":\"Execution context was destroyed.\"}"
+    },
+    "seed-repeat": {
+      "error": "{\"code\":-32000,\"message\":\"Execution context was destroyed.\"}"
+    },
+    "seed-changed": {
+      "error": "{\"code\":-32000,\"message\":\"Execution context was destroyed.\"}"
+    },
+    "seed-noise": {
+      "error": "{\"code\":-32000,\"message\":\"Execution context was destroyed.\"}"
+    },
+    "adapter-over-host": {
+      "error": "{\"code\":-32000,\"message\":\"Execution context was destroyed.\"}"
+    },
+    "custom-over-host": {
+      "error": "{\"code\":-32000,\"message\":\"Execution context was destroyed.\"}"
+    },
+    "gpu-pinned": {
+      "error": "{\"code\":-32000,\"message\":\"Execution context was destroyed.\"}"
+    },
+    "webrtc-control": {
+      "error": "{\"code\":-32000,\"message\":\"Execution context was destroyed.\"}"
+    },
+    "host-field-conflict": {
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "apostate: --fingerprint names an off value, so no profile is composed and --fingerprint-hardware-concurrency cannot take effect. Drop one of the two: --fingerprint=off for this machine's real fingerprint, or a seed for a composed one. --fingerprint-explain still works with either.\r\n",
+      "arguments": [
+        "--user-data-dir=<isolated-temporary-profile>",
+        "--fingerprint=host",
+        "--fingerprint-hardware-concurrency=2",
+        "--fingerprint-explain"
+      ],
+      "timeout": false
+    },
+    "raw-over-host-cpu": {
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "apostate: --fingerprint-hardware-concurrency=20 is above this host's 16 logical cores. A page can measure parallel throughput, so a count the machine cannot deliver is falsifiable in a way a lower count is not. Pass a value of 16 or less.\r\n",
+      "arguments": [
+        "--user-data-dir=<isolated-temporary-profile>",
+        "--fingerprint=42",
+        "--fingerprint-hardware-concurrency=20",
+        "--fingerprint-explain"
+      ],
+      "timeout": false
+    },
+    "raw-over-host-memory": {
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "apostate: --fingerprint-device-memory names 51539607552 bytes, which is above this host's 42806288384. A page can allocate until it fails, so claiming more memory than the machine has is falsifiable in a way claiming less is not.\r\n",
+      "arguments": [
+        "--user-data-dir=<isolated-temporary-profile>",
+        "--fingerprint=42",
+        "--fingerprint-device-memory=48",
+        "--fingerprint-explain"
+      ],
+      "timeout": false
+    }
+  },
+  "completedAt": "2026-10-21T08:33:53.934Z"
+}

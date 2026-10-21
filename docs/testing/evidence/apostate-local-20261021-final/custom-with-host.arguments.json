@@ -1,0 +1,20 @@
+[
+  "--user-data-dir=<isolated-temporary-profile>",
+  "--apostate-profile=eyJjcHUiOnsibG9naWNhbF9jb3JlcyI6Mn0sIm1lbW9yeSI6eyJ0b3RhbF9ieXRlcyI6MjE0NzQ4MzY0OH0sInNjcmVlbiI6eyJ3aWR0aCI6MTI4MCwiaGVpZ2h0Ijo5MDAsImF2YWlsX3dpZHRoIjoxMjgwLCJhdmFpbF9oZWlnaHQiOjg1Mn0sImxvY2FsZSI6eyJhcHBsaWNhdGlvbiI6ImVuLUdCIiwiYWNjZXB0X2xhbmd1YWdlcyI6ImVuLUdCLGVuIiwidGltZXpvbmUiOiJFdXJvcGUvTG9uZG9uIn19",
+  "--window-size=1000,700",
+  "--window-name=[1] acceptance-custom",
+  "--abc-profile-serial=1",
+  "--abc-profile-id=acceptance",
+  "--no-first-run",
+  "--no-default-browser-check",
+  "--disable-background-mode",
+  "--disable-background-networking",
+  "--disable-component-update",
+  "--window-position=0,0",
+  "--fingerprint-webrtc-udp=block",
+  "--fingerprint=host",
+  "--fingerprint-platform=macos",
+  "--fingerprint-hardware-concurrency=1",
+  "--remote-debugging-port=0",
+  "<loopback-probe>"
+]

@@ -1,0 +1,6 @@
+[
+  "--user-data-dir=<isolated-temporary-profile>",
+  "--fingerprint=42",
+  "--fingerprint-device-memory=48",
+  "--fingerprint-explain"
+]

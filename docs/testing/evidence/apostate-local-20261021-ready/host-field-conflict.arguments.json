@@ -1,0 +1,6 @@
+[
+  "--user-data-dir=<isolated-temporary-profile>",
+  "--fingerprint=host",
+  "--fingerprint-hardware-concurrency=2",
+  "--fingerprint-explain"
+]

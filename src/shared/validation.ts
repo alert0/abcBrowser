@@ -111,6 +111,9 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft {
   if (!Number.isInteger(fp.seed) || fp.seed < 0 || fp.seed > 0xffffffff) {
     throw new Error('指纹种子必须是 0–4294967295 的整数')
   }
+  if (!customProfileActive && !selectedHardware?.hostMatched && fp.seed === 0) {
+    throw new Error('Apostate Seed 模式种子不能为 0（内核将 0 解释为主机模式）')
+  }
   if (fp.gpuBucket !== undefined && (
     !Number.isInteger(fp.gpuBucket)
     || fp.gpuBucket < 0

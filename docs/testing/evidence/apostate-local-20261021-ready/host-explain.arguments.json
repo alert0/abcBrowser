@@ -1,0 +1,5 @@
+[
+  "--user-data-dir=<isolated-temporary-profile>",
+  "--fingerprint=host",
+  "--fingerprint-explain"
+]
