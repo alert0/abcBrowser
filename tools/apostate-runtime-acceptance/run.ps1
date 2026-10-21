@@ -74,7 +74,26 @@ function Invoke-Apostate {
     }
   }
   $argumentLine = $quotedArguments -join ' '
-  $process = Start-Process -FilePath $script:chromePath -ArgumentList $argumentLine -PassThru -NoNewWindow -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+  try {
+    $process = Start-Process -FilePath $script:chromePath -ArgumentList $argumentLine -PassThru -NoNewWindow -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+  } catch {
+    $startMessage = $_.Exception.Message
+    $sideBySideEvents = @()
+    try {
+      $sideBySideEvents = @(Get-WinEvent -FilterHashtable @{
+        LogName = 'Application'
+        ProviderName = 'SideBySide'
+        StartTime = (Get-Date).AddMinutes(-5)
+      } -MaxEvents 5 -ErrorAction SilentlyContinue | ForEach-Object { $_.Message })
+    } catch {}
+    $manifestFiles = @()
+    try {
+      $manifestFiles = @(Get-ChildItem -LiteralPath (Split-Path -Parent $script:chromePath) -Filter '*.manifest' -File -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+    } catch {}
+    $details = "Start error: $startMessage; SideBySide events: $($sideBySideEvents -join ' || '); adjacent manifests: $($manifestFiles -join ', ')"
+    Add-Check -Name "$Label startup diagnostics" -Status 'FAIL' -Details $details
+    throw "$Label could not start. $details"
+  }
 
   if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
     & taskkill.exe /PID $process.Id /T /F 2>$null | Out-Null
