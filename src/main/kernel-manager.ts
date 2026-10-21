@@ -21,7 +21,7 @@ import type { AppSettings } from '../shared/types'
 import { kernelRequiresPro } from '../shared/kernel-policy'
 import { assertChromiumVersion } from './engines/apostate/version'
 import { APOSTATE_ENGINE_ID } from './engines/apostate/capabilities'
-import { resolveApostateWindowsRuntimeRoot } from './engines/apostate/runtime-layout'
+import { assertApostateWindowsSxsManifest, resolveApostateWindowsRuntimeRoot } from './engines/apostate/runtime-layout'
 
 const execFileAsync = promisify(execFile)
 const RELEASES_URL = 'https://api.github.com/repos/adryfish/fingerprint-chromium/releases?per_page=10'
@@ -246,6 +246,7 @@ export class KernelManager {
     if (!manifest) throw new Error('该内核尚未安装')
     const executable = join(this.kernelPath(version), manifest.executableRelative)
     if (!await pathExists(executable)) throw new Error('内核文件不完整，请重新安装')
+    if (process.platform === 'win32') await assertApostateWindowsSxsManifest(dirname(executable), version)
     const integrity = await verifyKernelIntegrity(this.kernelPath(version), manifest.executableRelative, manifest)
     if (integrity.status === 'corrupt') throw new Error(`内核完整性校验失败：${integrity.reason}`)
     await this.rememberPreviousKernel(executable)
@@ -303,6 +304,7 @@ export class KernelManager {
       const executable = join(this.kernelPath(version), manifest.executableRelative)
       const info = await stat(executable)
       if (!info.isFile() || info.size <= 0) return { version, status: 'corrupt', message: '内核文件已损坏，请重新导入或安装新版 Prism Browser', checkedAt }
+      if (process.platform === 'win32') await assertApostateWindowsSxsManifest(dirname(executable), version)
       const integrity = await verifyKernelIntegrity(this.kernelPath(version), manifest.executableRelative, manifest)
       if (integrity.status === 'corrupt') {
         this.logger?.error('浏览器内核完整性检查失败', { version, reason: integrity.reason })
@@ -504,6 +506,7 @@ export class KernelManager {
       await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command])
       const chrome = await findEntry(extracted, (name) => name.toLowerCase() === 'chrome.exe')
       if (!chrome) throw new Error('ZIP 中没有找到 chrome.exe')
+      await assertApostateWindowsSxsManifest(dirname(chrome), release.version)
       const browserPath = join(stagingPath, 'browser')
       await cp(dirname(chrome), browserPath, { recursive: true })
       const executable = join(browserPath, 'chrome.exe')
@@ -559,7 +562,7 @@ export class KernelManager {
     const command = `(Get-Item -LiteralPath '${escaped}').VersionInfo.ProductVersion`
     const { stdout } = await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command])
     const version = assertChromiumVersion(stdout)
-    const { sourceRoot, sourceExecutableRelative } = await resolveApostateWindowsRuntimeRoot(executable)
+    const { sourceRoot, sourceExecutableRelative } = await resolveApostateWindowsRuntimeRoot(executable, version)
     return {
       version,
       sourceRoot,

@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "capturedAtUtc": "2026-10-21T05:26:07.8505805Z",
+  "repository": {
+    "name": "alert0/abcBrowser",
+    "branch": "feature/apostate-local-kernel",
+    "sourceCommit": "78f074730e433ea3d03f3a2c84f29cdd54e6cc90",
+    "backupBranch": "codex/backup-feature-apostate-local-kernel-20261021-78f0747",
+    "sourceWorktreeDirty": true,
+    "acceptanceScriptSha256": "376dfa79fd1b0e06fe333096335a0090cdf309198ba0b00724818787a26da790",
+    "probeServerSha256": "100ab5460c617e9dc651cd7866000c7582ca916c7e05f8660b03fd39080b84c1"
+  },
+  "release": {
+    "repository": "heretic-tech/apostate",
+    "tag": "v0.5.1",
+    "chromiumVersion": "155.0.8059.31",
+    "asset": "apostate-155.0.8059.31-windows-x64.zip",
+    "assetUrl": "https://github.com/heretic-tech/apostate/releases/download/v0.5.1/apostate-155.0.8059.31-windows-x64.zip",
+    "expectedSha256": "8e55e44fb7f58619461e1d42a947446dcc08a2b46493c420c8e62ae27ab9c7e5",
+    "observedSha256": "8e55e44fb7f58619461e1d42a947446dcc08a2b46493c420c8e62ae27ab9c7e5",
+    "releaseZipManifestMetadataSha256": "f284241cdc4840b972a3b273badd753e303ce9ed06a84439a2e0e38bb41a8f4b",
+    "versionedSxsManifestEntries": []
+  },
+  "environment": {
+    "os": "Microsoft Windows 11 Pro for Workstations",
+    "build": "26300",
+    "architecture": "64-bit",
+    "processor": "AMD Ryzen 7 5800 8-Core Processor",
+    "gpuAdapters": [
+      "AMD Radeon R7 200 Series (driver 27.20.1034.6)",
+      "GameViewer Virtual Display Adapter (driver 15.6.5.199)"
+    ],
+    "logicalProcessors": 16,
+    "physicalMemoryBytes": 42806288384,
+    "powershell": "7.6.5"
+  },
+  "runtimeLayout": {
+    "chromeExe": true,
+    "chromeDll": true,
+    "chromeElfDll": true,
+    "resourcesPak": true,
+    "icudtlDat": true,
+    "externalVersionedManifest": false
+  },
+  "embeddedManifest": {
+    "extractedWith": "Windows SDK mt.exe",
+    "byteLength": 1296,
+    "dependentAssembly": {
+      "name": "155.0.8059.31",
+      "version": "155.0.8059.31",
+      "type": "win32",
+      "language": "*"
+    }
+  },
+  "launch": {
+    "command": "chrome.exe --version",
+    "result": "FAIL",
+    "windowsMessage": "The application has failed to start because its side-by-side configuration is incorrect.",
+    "sideBySideEvent": {
+      "eventId": 33,
+      "provider": "SideBySide",
+      "missingAssembly": "155.0.8059.31",
+      "version": "155.0.8059.31",
+      "type": "win32",
+      "language": "*"
+    }
+  },
+  "sxstrace": {
+    "status": "UNVERIFIED",
+    "reason": "StartTrace failed in a non-elevated session; no ETL trace was produced."
+  },
+  "checks": [
+    { "name": "official release SHA-256", "status": "PASS" },
+    { "name": "complete runtime layout", "status": "PASS" },
+    { "name": "chrome.exe embedded SxS dependency", "status": "PASS" },
+    { "name": "release ZIP versioned SxS manifest", "status": "FAIL" },
+    { "name": "chrome.exe --version startup", "status": "FAIL" },
+    { "name": "fingerprint explain and page API checks", "status": "UNVERIFIED", "reason": "Stopped before any runtime probes because Windows activation failed." }
+  ],
+  "upstreamPackagingSource": [
+    {
+      "path": "scripts/build.sh",
+      "url": "https://github.com/heretic-tech/apostate/blob/v0.5.1/scripts/build.sh",
+      "blobSha": "b88617880f03aa177cb0a1508fbc27f89ef8719d",
+      "finding": "Windows build output inventory omits the versioned external SxS manifest."
+    },
+    {
+      "path": "scripts/package-artifact.sh",
+      "url": "https://github.com/heretic-tech/apostate/blob/v0.5.1/scripts/package-artifact.sh",
+      "blobSha": "dcd29882f09d0094a5b11a3d10a5de23391dd20a",
+      "finding": "Windows required and optional staging lists omit the versioned external SxS manifest."
+    }
+  ],
+  "localRawEvidenceDirectory": "%TEMP%\\apostate-native-acceptance\\evidence\\20261021T052652Z"
+}

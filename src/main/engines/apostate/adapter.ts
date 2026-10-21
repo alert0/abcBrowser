@@ -50,7 +50,23 @@ export function buildApostateLaunchArgs(profile: BrowserProfile, options: Aposta
   const args = [`--user-data-dir=${options.userDataDir}`]
 
   if (authoredProfileJson) {
-    args.push(`--apostate-profile=${Buffer.from(authoredProfileJson, 'utf8').toString('base64')}`)
+    const authoredProfile = JSON.parse(authoredProfileJson) as {
+      cpu?: { logical_cores?: number }
+      memory?: { total_bytes?: number }
+    }
+    if (Number.isInteger(options.hostHardwareConcurrency) && (options.hostHardwareConcurrency ?? 0) > 0
+      && typeof authoredProfile.cpu?.logical_cores === 'number') {
+      authoredProfile.cpu.logical_cores = Math.min(authoredProfile.cpu.logical_cores, options.hostHardwareConcurrency!)
+    }
+    if (Number.isFinite(options.hostMemoryGb) && (options.hostMemoryGb ?? 0) > 0
+      && typeof authoredProfile.memory?.total_bytes === 'number') {
+      authoredProfile.memory.total_bytes = Math.min(
+        authoredProfile.memory.total_bytes,
+        Math.floor(options.hostMemoryGb! * (1024 ** 3))
+      )
+    }
+    const effectiveProfileJson = JSON.stringify(authoredProfile)
+    args.push(`--apostate-profile=${Buffer.from(effectiveProfileJson, 'utf8').toString('base64')}`)
   } else if (hostMode) {
     // Apostate host mode composes nothing. Do not send per-field overrides.
     args.push('--fingerprint=host')

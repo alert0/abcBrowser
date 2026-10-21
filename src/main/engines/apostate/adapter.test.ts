@@ -39,6 +39,11 @@ describe('Apostate adapter', () => {
     next.fingerprint.hardwareProfileId = process.platform === 'win32' ? 'windows-host' : 'macos-host'
     next.fingerprint.platform = process.platform === 'win32' ? 'windows' : 'macos'
     next.fingerprint.deviceMemoryGb = 16
+    next.fingerprint.hardwareConcurrency = 24
+    next.fingerprint.screenWidth = 2560
+    next.fingerprint.screenHeight = 1440
+    next.fingerprint.language = 'fr-FR'
+    next.fingerprint.timezone = 'Europe/Paris'
     next.fingerprint.gpuAnchor = 'windows-d3d11-nvidia-0947761dfbe9'
     next.fingerprint.gpuRenderer = 'ANGLE renderer'
     next.fingerprint.canvasWebglNoise = true
@@ -47,6 +52,10 @@ describe('Apostate adapter', () => {
     expect(args.some((arg) => arg.startsWith('--fingerprint-platform='))).toBe(false)
     expect(args.some((arg) => arg.startsWith('--fingerprint-hardware-concurrency='))).toBe(false)
     expect(args.some((arg) => arg.startsWith('--fingerprint-device-memory='))).toBe(false)
+    expect(args.some((arg) => arg.startsWith('--fingerprint-screen-'))).toBe(false)
+    expect(args.some((arg) => arg.startsWith('--fingerprint-locale='))).toBe(false)
+    expect(args.some((arg) => arg.startsWith('--fingerprint-timezone='))).toBe(false)
+    expect(args.some((arg) => arg.startsWith('--lang='))).toBe(false)
     expect(args.some((arg) => arg.startsWith('--fingerprint-anchor='))).toBe(false)
     expect(args.some((arg) => arg.startsWith('--fingerprint-gpu-renderer='))).toBe(false)
     expect(args).not.toContain('--fingerprint-noise')
@@ -102,7 +111,31 @@ describe('Apostate adapter', () => {
     expect(args.some((arg) => arg.startsWith('--fingerprint-platform='))).toBe(false)
     expect(args.some((arg) => arg.startsWith('--fingerprint-anchor='))).toBe(false)
     expect(args.some((arg) => arg.startsWith('--fingerprint-device-memory='))).toBe(false)
+    expect(args.some((arg) => arg.startsWith('--fingerprint-hardware-concurrency='))).toBe(false)
+    expect(args.some((arg) => arg.startsWith('--fingerprint-screen-'))).toBe(false)
+    expect(args.some((arg) => arg.startsWith('--fingerprint-locale='))).toBe(false)
+    expect(args.some((arg) => arg.startsWith('--fingerprint-timezone='))).toBe(false)
+    expect(args.some((arg) => arg.startsWith('--fingerprint-gpu-renderer='))).toBe(false)
+    expect(args.some((arg) => arg.startsWith('--lang='))).toBe(false)
     expect(args).not.toContain('--fingerprint-noise')
+  })
+
+  it('clamps CPU and installed memory in authored profiles to the actual host limits', () => {
+    const next = profile()
+    next.fingerprint.hardwareProfileId = 'legacy-custom'
+    next.fingerprint.apostateProfileJson = JSON.stringify({
+      cpu: { logical_cores: 32 },
+      memory: { total_bytes: 34359738368 }
+    })
+    const args = buildApostateLaunchArgs(next, {
+      userDataDir: 'C:\\profiles\\authored-clamp',
+      hostHardwareConcurrency: 8,
+      hostMemoryGb: 8
+    })
+    const profileArg = args.find((arg) => arg.startsWith('--apostate-profile='))
+    expect(profileArg).toBeDefined()
+    expect(JSON.parse(Buffer.from(profileArg!.slice('--apostate-profile='.length), 'base64').toString('utf8')))
+      .toEqual({ cpu: { logical_cores: 8 }, memory: { total_bytes: 8589934592 } })
   })
 
   it('ignores legacy WebRTC policy when host or authored profile mode takes precedence', () => {
