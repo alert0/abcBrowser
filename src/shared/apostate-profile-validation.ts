@@ -11,8 +11,11 @@ interface JsonSchema {
   minContains?: number
   maxContains?: number
   enum?: unknown[]
+  const?: unknown
   minimum?: number
   maximum?: number
+  exclusiveMinimum?: number
+  exclusiveMaximum?: number
   multipleOf?: number
   minLength?: number
   maxLength?: number
@@ -61,6 +64,9 @@ function validateNode(value: unknown, schema: JsonSchema, path: string, issues: 
   if (schema.enum && !schema.enum.some((candidate) => stableJson(candidate) === stableJson(value))) {
     issues.push(`${path}: value is not in the allowed enum`)
   }
+  if (Object.prototype.hasOwnProperty.call(schema, 'const') && stableJson(schema.const) !== stableJson(value)) {
+    issues.push(`${path}: value must equal the required constant`)
+  }
 
   if (typeof value === 'string') {
     const length = Array.from(value).length
@@ -73,6 +79,8 @@ function validateNode(value: unknown, schema: JsonSchema, path: string, issues: 
   if (typeof value === 'number' && Number.isFinite(value)) {
     if (schema.minimum !== undefined && value < schema.minimum) issues.push(`${path}: number is below ${schema.minimum}`)
     if (schema.maximum !== undefined && value > schema.maximum) issues.push(`${path}: number is above ${schema.maximum}`)
+    if (schema.exclusiveMinimum !== undefined && value <= schema.exclusiveMinimum) issues.push(`${path}: number must be greater than ${schema.exclusiveMinimum}`)
+    if (schema.exclusiveMaximum !== undefined && value >= schema.exclusiveMaximum) issues.push(`${path}: number must be less than ${schema.exclusiveMaximum}`)
     if (schema.multipleOf !== undefined) {
       const quotient = value / schema.multipleOf
       if (Math.abs(quotient - Math.round(quotient)) > 1e-9) issues.push(`${path}: number is not a multiple of ${schema.multipleOf}`)

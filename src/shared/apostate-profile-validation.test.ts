@@ -26,6 +26,15 @@ describe('Apostate v3 profile schema validation', () => {
     expect(() => validateApostateProfileJson('{"cpu":{"logical_cores":"8"}}')).toThrow('expected integer')
   })
 
+  it('enforces const and exclusive numeric bounds from the official schema', () => {
+    expect(() => validateApostateProfileJson(JSON.stringify({
+      screen: { displays: [{ is_primary: false }] }
+    }))).toThrow('matching array item')
+    expect(() => validateApostateProfileJson(JSON.stringify({
+      theme: { system_fonts: { caption: { family: 'Arial', size_px: 0 } } }
+    }))).toThrow('number must be greater than 0')
+  })
+
   it('rejects oversized payloads before parsing or encoding', () => {
     expect(() => validateApostateProfileJson('x'.repeat(13 * 1024))).toThrow('12 KiB')
   })
