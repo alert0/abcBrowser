@@ -28,7 +28,21 @@ describe('Apostate v3 profile schema validation', () => {
 
   it('enforces const and exclusive numeric bounds from the official schema', () => {
     expect(() => validateApostateProfileJson(JSON.stringify({
-      screen: { displays: [{ is_primary: false }] }
+      screen: {
+        displays: [{
+          left: 0,
+          top: 0,
+          width: 1920,
+          height: 1080,
+          avail_width: 1920,
+          avail_height: 1040,
+          device_pixel_ratio: 1,
+          color_depth: 24,
+          is_primary: false,
+          is_internal: true,
+          label: 'Display 1'
+        }]
+      }
     }))).toThrow('matching array item')
     expect(() => validateApostateProfileJson(JSON.stringify({
       theme: { system_fonts: { caption: { family: 'Arial', size_px: 0 } } }
