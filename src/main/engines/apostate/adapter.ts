@@ -19,6 +19,24 @@ export function profileWindowName(profile: Pick<BrowserProfile, 'serialNumber' |
   return `[${profile.serialNumber}] ${name}`
 }
 
+/**
+ * Custom profiles with no locale would otherwise use Apostate's built-in
+ * en-US defaults, even on non-English hosts. Use the operating system language
+ * instead; never mix seed/persona language values into authored profiles.
+ */
+function inheritedHostLocale(hostLocale: string | undefined): { application: string; accept_languages: string } {
+  if (!hostLocale) throw new Error('Custom Profile 缺少语言配置，且无法读取系统语言；请显式设置 locale.application 和 locale.accept_languages')
+  let language: string
+  try { language = Intl.getCanonicalLocales(hostLocale.trim())[0] }
+  catch { throw new Error('无法识别系统语言，请显式设置 Custom Profile 的 locale 配置') }
+  if (!language) throw new Error('无法识别系统语言，请显式设置 Custom Profile 的 locale 配置')
+  const base = language.split('-')[0]
+  return {
+    application: language,
+    accept_languages: base === language ? language : `${language},${base}`
+  }
+}
+
 function assertSafeLocale(value: string, language: string): string {
   const normalized = value.trim()
   try {
@@ -86,6 +104,7 @@ export function buildApostateLaunchArgs(profile: BrowserProfile, options: Aposta
     const authoredProfile = JSON.parse(authoredProfileJson) as {
       cpu?: { logical_cores?: number }
       memory?: { total_bytes?: number }
+      locale?: { application?: string; accept_languages?: string; timezone?: string }
     }
     if (typeof authoredProfile.cpu?.logical_cores === 'number') {
       authoredProfile.cpu.logical_cores = Math.min(authoredProfile.cpu.logical_cores, hostCores)
@@ -95,6 +114,16 @@ export function buildApostateLaunchArgs(profile: BrowserProfile, options: Aposta
         authoredProfile.memory.total_bytes,
         Math.floor(hostMemoryGb * (1024 ** 3))
       )
+    }
+    // Fill only missing language fields, preserving explicit user values and
+    // optional timezone. Native defaults are en-US rather than the host locale.
+    if (!authoredProfile.locale?.application && !authoredProfile.locale?.accept_languages) {
+      const inherited = inheritedHostLocale(options.hostLocale)
+      authoredProfile.locale = { ...authoredProfile.locale, ...inherited }
+    } else if (authoredProfile.locale?.application && !authoredProfile.locale.accept_languages) {
+      const language = Intl.getCanonicalLocales(authoredProfile.locale.application)[0]
+      const base = language.split('-')[0]
+      authoredProfile.locale.accept_languages = base === language ? language : `${language},${base}`
     }
     const effectiveProfileJson = JSON.stringify(authoredProfile)
     args.push(`--apostate-profile=${Buffer.from(effectiveProfileJson, 'utf8').toString('base64')}`)
