@@ -106,7 +106,7 @@ describe('Apostate adapter', () => {
     next.fingerprint.gpuAnchor = 'auto'
     next.fingerprint.gpuRenderer = undefined
     next.fingerprint.canvasWebglNoise = true
-    const args = buildApostateLaunchArgs(next, { userDataDir: 'C:\\profiles\\authored' })
+    const args = buildApostateLaunchArgs(next, { userDataDir: 'C:\\profiles\\authored', hostLocale: 'zh-CN' })
     const profileArg = args.find((arg) => arg.startsWith('--apostate-profile='))
     expect(profileArg).toBeDefined()
     expect(Buffer.from(profileArg!.slice('--apostate-profile='.length), 'base64').toString('utf8'))
@@ -134,7 +134,8 @@ describe('Apostate adapter', () => {
     const args = buildApostateLaunchArgs(next, {
       userDataDir: 'C:\\profiles\\authored-clamp',
       hostHardwareConcurrency: 8,
-      hostMemoryGb: 8
+      hostMemoryGb: 8,
+      hostLocale: 'zh-CN'
     })
     const profileArg = args.find((arg) => arg.startsWith('--apostate-profile='))
     expect(profileArg).toBeDefined()
@@ -193,7 +194,7 @@ describe('Apostate adapter', () => {
         ? (process.platform === 'win32' ? 'windows-host' : 'macos-host') : 'legacy-custom'
       next.fingerprint.apostateProfileJson = mode === 'custom' ? '{"cpu":{"logical_cores":2}}' : ''
       next.fingerprint.webrtcPolicy = policy
-      const args = buildApostateLaunchArgs(next, { userDataDir: 'test' })
+      const args = buildApostateLaunchArgs(next, { userDataDir: 'test', hostLocale: 'zh-CN' })
       expect(args.filter(a => a.startsWith('--fingerprint=') || a.startsWith('--apostate-profile='))).toHaveLength(1)
       expect(args.includes('--fingerprint=host')).toBe(mode === 'host')
       expect(args.some(a => a.startsWith('--apostate-profile='))).toBe(mode === 'custom')
@@ -269,7 +270,7 @@ describe('Apostate adapter', () => {
     next.fingerprint.hardwareProfileId = process.platform === 'win32' ? 'windows-host' : 'macos-host'
     next.fingerprint.seed = 0
     next.fingerprint.apostateProfileJson = '{"cpu":{"logical_cores":2}}'
-    const args = buildApostateLaunchArgs(next, { userDataDir: 'test' })
+    const args = buildApostateLaunchArgs(next, { userDataDir: 'test', hostLocale: 'zh-CN' })
     expect(args.some(a => a.startsWith('--apostate-profile='))).toBe(true)
     expect(args.some(a => a.startsWith('--fingerprint='))).toBe(false)
     expect(JSON.parse(next.fingerprint.apostateProfileJson)).toEqual({ cpu: { logical_cores: 2 } })
