@@ -1,3 +1,4 @@
+import { app } from 'electron'
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { access, mkdir, mkdtemp, readFile, rename, rm, statfs, writeFile } from 'node:fs/promises'
 import { constants } from 'node:fs'
@@ -236,6 +237,7 @@ export class BrowserLauncher {
         hostHardwareConcurrency: hostHardware.hardwareConcurrency,
         hostMemoryGb: hostHardware.physicalMemoryGb,
         hostPlatformVersion: hostHardware.platformVersion,
+        hostLocale: app.getSystemLocale(),
         proxyIdentity: profile.proxyCheck,
         allowGeoConflict: options.allowGeoConflict === true
       })
