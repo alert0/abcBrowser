@@ -110,7 +110,7 @@ describe('Apostate adapter', () => {
     const profileArg = args.find((arg) => arg.startsWith('--apostate-profile='))
     expect(profileArg).toBeDefined()
     expect(Buffer.from(profileArg!.slice('--apostate-profile='.length), 'base64').toString('utf8'))
-      .toBe(JSON.stringify(JSON.parse(next.fingerprint.apostateProfileJson!)))
+      .toBe(JSON.stringify({ ...JSON.parse(next.fingerprint.apostateProfileJson!), locale: { application: 'en-GB', timezone: 'Europe/London', accept_languages: 'en-GB,en' } }))
     expect(args.some((arg) => arg.startsWith('--fingerprint=') && arg !== '--fingerprint=host')).toBe(false)
     expect(args.some((arg) => arg.startsWith('--fingerprint-platform='))).toBe(false)
     expect(args.some((arg) => arg.startsWith('--fingerprint-anchor='))).toBe(false)
@@ -140,7 +140,7 @@ describe('Apostate adapter', () => {
     const profileArg = args.find((arg) => arg.startsWith('--apostate-profile='))
     expect(profileArg).toBeDefined()
     expect(JSON.parse(Buffer.from(profileArg!.slice('--apostate-profile='.length), 'base64').toString('utf8')))
-      .toEqual({ cpu: { logical_cores: 8 }, memory: { total_bytes: 8589934592 } })
+      .toEqual({ cpu: { logical_cores: 8 }, memory: { total_bytes: 8589934592 }, locale: { application: 'zh-CN', accept_languages: 'zh-CN,zh' } })
   })
 
 
