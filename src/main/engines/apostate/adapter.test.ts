@@ -142,6 +142,36 @@ describe('Apostate adapter', () => {
       .toEqual({ cpu: { logical_cores: 8 }, memory: { total_bytes: 8589934592 } })
   })
 
+
+  it('inherits OS language in a partial Custom Profile without taking seed language', () => {
+    const next = profile()
+    next.fingerprint.apostateProfileJson = '{"cpu":{"logical_cores":2}}'
+    next.fingerprint.language = 'fr-FR'
+    const args = buildApostateLaunchArgs(next, { userDataDir: 'test', hostLocale: 'zh-CN' })
+    const encoded = args.find(a => a.startsWith('--apostate-profile='))!.slice('--apostate-profile='.length)
+    const decoded = JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'))
+    expect(decoded.locale).toEqual({ application: 'zh-CN', accept_languages: 'zh-CN,zh' })
+    expect(args.some(a => a.startsWith('--fingerprint-locale='))).toBe(false)
+  })
+
+  it('retains explicit Custom Profile locale and timezone', () => {
+    const next = profile()
+    next.fingerprint.apostateProfileJson = JSON.stringify({
+      cpu: { logical_cores: 2 },
+      locale: { application: 'de-DE', accept_languages: 'de-DE,de', timezone: 'Europe/Berlin' }
+    })
+    const args = buildApostateLaunchArgs(next, { userDataDir: 'test', hostLocale: 'zh-CN' })
+    const encoded = args.find(a => a.startsWith('--apostate-profile='))!.slice('--apostate-profile='.length)
+    expect(JSON.parse(Buffer.from(encoded, 'base64').toString('utf8')).locale)
+      .toEqual({ application: 'de-DE', accept_languages: 'de-DE,de', timezone: 'Europe/Berlin' })
+  })
+
+  it('rejects missing Custom Profile language when host locale is unavailable', () => {
+    const next = profile()
+    next.fingerprint.apostateProfileJson = '{"cpu":{"logical_cores":2}}'
+    expect(() => buildApostateLaunchArgs(next, { userDataDir: 'test' })).toThrow('系统语言')
+  })
+
   it('rejects unsupported WebRTC policy in host and authored modes too', () => {
     const authored = profile()
     authored.fingerprint.hardwareProfileId = 'legacy-custom'
