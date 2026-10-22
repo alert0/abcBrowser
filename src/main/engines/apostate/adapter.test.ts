@@ -232,7 +232,7 @@ describe('Apostate adapter', () => {
       next.fingerprint.screenHeight = 768
       next.fingerprint.apostateProfileJson = custom ? '{"screen":{"width":1024,"height":768}}' : ''
       next.window = { mode: 'custom', width: 1200, height: 800, x: 0, y: 0 }
-      expect(() => buildApostateLaunchArgs(next, { userDataDir: 'test' })).toThrow('窗口')
+      expect(() => buildApostateLaunchArgs(next, { userDataDir: 'test', hostLocale: 'zh-CN' })).toThrow('窗口')
     }
   })
 
