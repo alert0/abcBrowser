@@ -12,6 +12,8 @@ export interface ApostateLaunchOptions {
   /** Physical GiB, possibly fractional. Seed switches require whole GiB. */
   hostMemoryGb?: number
   hostPlatformVersion?: string
+  /** OS language obtained from Electron, used only when a custom profile omits locale. */
+  hostLocale?: string
   proxyIdentity?: ProxyCheckSummary
   allowGeoConflict?: boolean
 }
